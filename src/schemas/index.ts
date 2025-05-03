@@ -73,6 +73,11 @@ export const languagesSchema = z.enum(languages)
 
 export type Language = z.infer<typeof languagesSchema>
 
+/**
+ * Type guard to check if a string is a valid Language
+ * @param value The string to check
+ * @returns True if the string is a valid Language
+ */
 export const isLanguage = (value: string): value is Language => languages.includes(value as Language)
 
 /**
@@ -205,8 +210,8 @@ export type GroupEntry = z.infer<typeof groupEntrySchema>
  */
 
 const groupEntryArraySchema = z.array(groupEntrySchema).refine(
-	(groups) => {
-		const seen = new Set()
+	(groups): boolean => {
+		const seen = new Set<string>()
 
 		return groups.every((group) => {
 			// For tuples, check the group name (first element).
@@ -240,8 +245,8 @@ export type ModeConfig = z.infer<typeof modeConfigSchema>
 
 export const customModesSettingsSchema = z.object({
 	customModes: z.array(modeConfigSchema).refine(
-		(modes) => {
-			const slugs = new Set()
+		(modes): boolean => {
+			const slugs = new Set<string>()
 
 			return modes.every((mode) => {
 				if (slugs.has(mode.slug)) {
@@ -753,6 +758,11 @@ const secretStateRecord: SecretStateRecord = {
 
 export const SECRET_STATE_KEYS = Object.keys(secretStateRecord) as Keys<SecretState>[]
 
+/**
+ * Type guard to check if a key is a SecretState key
+ * @param key The key to check
+ * @returns True if the key is a SecretState key
+ */
 export const isSecretStateKey = (key: string): key is Keys<SecretState> =>
 	SECRET_STATE_KEYS.includes(key as Keys<SecretState>)
 
@@ -766,6 +776,11 @@ export const GLOBAL_STATE_KEYS = [...GLOBAL_SETTINGS_KEYS, ...PROVIDER_SETTINGS_
 	(key: Keys<RooCodeSettings>) => !SECRET_STATE_KEYS.includes(key as Keys<SecretState>),
 ) as Keys<GlobalState>[]
 
+/**
+ * Type guard to check if a key is a GlobalState key
+ * @param key The key to check
+ * @returns True if the key is a GlobalState key
+ */
 export const isGlobalStateKey = (key: string): key is Keys<GlobalState> =>
 	GLOBAL_STATE_KEYS.includes(key as Keys<GlobalState>)
 
@@ -961,6 +976,9 @@ export type TypeDefinition = {
 	identifier: string
 }
 
+/**
+ * Type definitions to export for use in other modules
+ */
 export const typeDefinitions: TypeDefinition[] = [
 	{ schema: providerSettingsSchema, identifier: "ProviderSettings" },
 	{ schema: globalSettingsSchema, identifier: "GlobalSettings" },
