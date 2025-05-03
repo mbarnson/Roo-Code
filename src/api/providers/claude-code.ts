@@ -6,6 +6,13 @@ import { ApiHandler, SingleCompletionHandler } from "../index"
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
 import { XmlMatcher } from "../../utils/xml-matcher"
+import {
+	ClaudeCodeAuthStatus,
+	ClaudeCodeCommandOptions,
+	ClaudeCodeModelInfo,
+	ClaudeCodeModelsMap,
+	ClaudeCodeChatInput,
+} from "./models/claude-code-models"
 
 /**
  * Claude Code provider that uses the Claude Code CLI to interact with Claude
@@ -48,8 +55,13 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			}
 
 			try {
-				const status = JSON.parse(output)
-				return status.authenticated === true
+				const status = JSON.parse(output) as unknown
+				// Add proper type guard to check structure
+				if (status && typeof status === "object" && "authenticated" in status) {
+					const authStatus = status as ClaudeCodeAuthStatus
+					return authStatus.authenticated === true
+				}
+				return false
 			} catch (error) {
 				console.error("Failed to parse Claude Code auth status output:", error)
 				return false
@@ -60,7 +72,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 		}
 	}
 
-	static readonly defaultModels = {
+	static readonly defaultModels: ClaudeCodeModelsMap = {
 		"claude-3-opus-20240229": {
 			maxTokens: 4096,
 			contextWindow: 200000,
@@ -112,31 +124,15 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			outputPrice: 15,
 			description: "Claude 3.7 Sonnet - With thinking capability",
 		},
-	} as const
-
-	protected options: {
-		claudeCodePath?: string
-		claudeCodeModelId?: string
-		modelTemperature?: number
-		includeMaxTokens?: boolean
-		modelMaxTokens?: number
-		modelMaxThinkingTokens?: number
-		reasoningEffort?: "low" | "medium" | "high"
 	}
+
+	protected options: ClaudeCodeCommandOptions
 
 	private isAuthenticated: boolean = false
 	private authChecked: boolean = false
 	private authError: string | null = null
 
-	constructor(options: {
-		claudeCodePath?: string
-		claudeCodeModelId?: string
-		modelTemperature?: number
-		includeMaxTokens?: boolean
-		modelMaxTokens?: number
-		modelMaxThinkingTokens?: number
-		reasoningEffort?: "low" | "medium" | "high"
-	}) {
+	constructor(options: ClaudeCodeCommandOptions) {
 		super()
 		this.options = options
 
@@ -445,10 +441,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			const [isAuthenticated, authError] = await this.waitForAuthentication(true)
 
 			// If in yielding mode, provide status
-			if (true) {
-				// canYield is always true here
-				yield { type: "text", text: "Checking Claude Code CLI authentication status..." }
-			}
+			yield { type: "text", text: "Checking Claude Code CLI authentication status..." }
 
 			// Check if authenticated
 			if (!isAuthenticated) {
@@ -480,19 +473,39 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 				args.push("--thinking-budget", this.options.modelMaxThinkingTokens.toString())
 			}
 
-			// Create a temporary input file with messages and system prompt
-			const inputJson = {
-				system: systemPrompt,
-				messages: messages.map((msg) => ({
+			// Process message content with proper type handling
+			const processedMessages = messages.map((msg) => {
+				let processedContent: string
+
+				if (typeof msg.content === "string") {
+					processedContent = msg.content
+				} else if (Array.isArray(msg.content)) {
+					// Process array of content blocks
+					processedContent = msg.content
+						.filter((item) => item.type === "text")
+						.map((item) => {
+							// Ensure we're only accessing text fields on text items
+							if (item.type === "text" && "text" in item) {
+								return item.text
+							}
+							return ""
+						})
+						.join("\n")
+				} else {
+					// Handle unexpected content type
+					processedContent = ""
+				}
+
+				return {
 					role: msg.role,
-					content:
-						typeof msg.content === "string"
-							? msg.content
-							: msg.content
-									.filter((item) => item.type === "text")
-									.map((item) => (item.type === "text" ? item.text : ""))
-									.join("\n"),
-				})),
+					content: processedContent,
+				}
+			})
+
+			// Create a properly typed input object for Claude Code CLI
+			const inputJson: ClaudeCodeChatInput = {
+				system: systemPrompt,
+				messages: processedMessages,
 			}
 
 			// Use stdin to pass the input
@@ -555,20 +568,23 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 		const modelId = this.options.claudeCodeModelId || "claude-3-sonnet-20240229"
 
 		// Use the default model info for known models, or a generic one for custom models
-		const defaultInfo = ClaudeCodeHandler.defaultModels[modelId as keyof typeof ClaudeCodeHandler.defaultModels]
+		const defaultInfo = modelId in ClaudeCodeHandler.defaultModels ? ClaudeCodeHandler.defaultModels[modelId] : null
+
+		// Generic fallback model info for unknown models
+		const fallbackModelInfo: ClaudeCodeModelInfo = {
+			maxTokens: 4096,
+			contextWindow: 200000,
+			supportsImages: true,
+			supportsPromptCache: false,
+			supportsComputerUse: true,
+			inputPrice: 3,
+			outputPrice: 15,
+			description: "Claude model via Claude Code CLI",
+		}
 
 		return {
 			id: modelId,
-			info: defaultInfo || {
-				maxTokens: 4096,
-				contextWindow: 200000,
-				supportsImages: true,
-				supportsPromptCache: false,
-				supportsComputerUse: true,
-				inputPrice: 3,
-				outputPrice: 15,
-				description: "Claude model via Claude Code CLI",
-			},
+			info: defaultInfo || fallbackModelInfo,
 		}
 	}
 
@@ -644,12 +660,34 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 		// Process each content block
 		for (const block of content) {
 			try {
-				// Convert to string for all cases - this works around the TypeScript issues
-				const blockString = JSON.stringify(block)
-				if (blockString) {
-					// Remove markup and just count raw text characters
-					const textOnly = blockString.replace(/"(type|role|source|name)":\s*"[^"]*"/g, "")
-					totalChars += textOnly.length / 2 // Divide by 2 to account for JSON formatting
+				if (!block) continue
+
+				// Process based on content block type
+				if (typeof block === "string") {
+					// String content
+					totalChars += block.length
+				} else if (typeof block === "object") {
+					// Safe string conversion with type checking
+					let blockText = ""
+
+					if ("type" in block && block.type === "text" && "text" in block) {
+						blockText = String(block.text || "")
+					} else if ("type" in block && block.type === "image" && "source" in block) {
+						// Images contribute less to token count in our estimation
+						blockText = "[image]"
+					} else {
+						// Convert block to JSON string for other types, with safe handling
+						try {
+							blockText = JSON.stringify(block)
+							// Remove markup to just count text
+							blockText = blockText.replace(/"(type|role|source|name)":\s*"[^"]*"/g, "")
+						} catch (jsonError) {
+							console.warn("Error stringifying block:", jsonError)
+							continue
+						}
+					}
+
+					totalChars += blockText.length
 				}
 			} catch (error) {
 				console.warn("Error counting tokens for block:", error)
@@ -678,7 +716,7 @@ export async function getClaudeCodeModels(claudeCodePath = "claude-code"): Promi
 			})
 
 			const exitCode = await new Promise<number>((resolve) => {
-				checkProcess.on("close", (code) => resolve(code || 0))
+				checkProcess.on("close", (code) => resolve(code !== null ? code : 0))
 			})
 
 			if (exitCode !== 0) {
@@ -714,7 +752,7 @@ export async function getClaudeCodeModels(claudeCodePath = "claude-code"): Promi
 		})
 
 		const exitCode = await new Promise<number>((resolve) => {
-			childProcess.on("close", (code) => resolve(code || 0))
+			childProcess.on("close", (code) => resolve(code !== null ? code : 0))
 		})
 
 		if (exitCode !== 0) {
@@ -723,14 +761,22 @@ export async function getClaudeCodeModels(claudeCodePath = "claude-code"): Promi
 			return defaultModels
 		}
 
-		if (output) {
+		if (output && output.trim()) {
 			try {
-				const models = JSON.parse(output)
-				if (Array.isArray(models)) {
-					return [...new Set([...models, ...defaultModels])]
+				// Parse with unknown type first, then validate
+				const parsedOutput = JSON.parse(output) as unknown
+
+				// Type guard to ensure it's an array
+				if (Array.isArray(parsedOutput)) {
+					// Combine models with default models, ensuring unique values
+					return [...new Set([...parsedOutput.filter((item) => typeof item === "string"), ...defaultModels])]
+				} else {
+					console.warn("Claude Code models output is not an array")
+					return defaultModels
 				}
 			} catch (err) {
 				console.warn("Failed to parse Claude Code models output:", err)
+				return defaultModels
 			}
 		}
 
