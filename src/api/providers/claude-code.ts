@@ -665,13 +665,14 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 				// Process based on content block type
 				if (typeof block === "string") {
 					// String content
-					totalChars += block.length
+					totalChars += (block as string)?.length || 0
 				} else if (typeof block === "object") {
 					// Safe string conversion with type checking
 					let blockText = ""
 
 					if ("type" in block && block.type === "text" && "text" in block) {
-						blockText = String(block.text || "")
+						const textContent = String(block.text || "")
+						blockText = textContent
 					} else if ("type" in block && block.type === "image" && "source" in block) {
 						// Images contribute less to token count in our estimation
 						blockText = "[image]"

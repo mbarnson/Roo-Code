@@ -1,9 +1,26 @@
 import * as vscode from 'vscode';
 import { ClaudeCodeHandler } from './claude-code';
-import { type FileContextTracker } from '@roo/shared';
-import { CompletionResponse, PromptOptions, ProviderOptions } from '@roo/shared/api';
-import { type DiffViewProvider } from './diff-view-provider';
-import { t } from 'i18next';
+import type { DiffViewProvider } from './diff-view-provider';
+import { t } from '../../i18n';
+import type { CompletionResponse, PromptOptions, ProviderOptions } from './common-types';
+
+// Wrapper for t function to handle record type
+function tFormat(key: string, defaultValue?: string, params?: Record<string, any>): string {
+  if (params) {
+    // Convert to any to work around the type mismatch issue
+    return t(key, defaultValue as any, params);
+  }
+  return t(key, defaultValue as any);
+}
+
+/**
+ * Interface for file context tracking
+ */
+export interface FileContextTracker {
+  trackFile(filePath: string): void;
+  markFileAsEditedByRoo(filePath: string): void;
+  trackFileContext(filePath: string, reason: string): Promise<void>;
+}
 
 /**
  * Interface for file operations
@@ -59,7 +76,7 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
    * Override to intercept file operations and route them through VS Code
    */
   async completePrompt(options: PromptOptions): Promise<CompletionResponse> {
-    this.updateStatus(t('claudeCode.status.working', 'Working...'));
+    this.updateStatus(t("common:status.claude_code.working"));
     
     try {
       // Get the original response from Claude Code
@@ -70,10 +87,10 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
         await this.processResponse(result);
       }
       
-      this.updateStatus(t('claudeCode.status.idle', 'Idle'));
+      this.updateStatus(tFormat("common:status.claude_code.idle", "Idle"));
       return result;
     } catch (error) {
-      this.updateStatus(t('claudeCode.status.error', 'Error'));
+      this.updateStatus(tFormat("common:status.claude_code.error", "Error"));
       this.handleError(error);
       throw error;
     }
@@ -204,18 +221,18 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: t('claudeCode.progress.applyingChanges', 'Applying Claude Code changes'),
+        title: tFormat("common:progress.claude_code.applyingChanges", "Applying Claude Code changes"),
         cancellable: true
       },
       async (progress, token) => {
         token.onCancellationRequested(() => {
-          throw new Error(t('claudeCode.error.cancelled', 'File operations cancelled'));
+          throw new Error(tFormat("common:errors.claude_code.cancelled", "File operations cancelled"));
         });
         
         // Process creates
         if (creates.length > 0) {
           progress.report({
-            message: t('claudeCode.progress.creatingFiles', 'Creating files...'),
+            message: tFormat("common:progress.claude_code.creatingFiles", "Creating files..."),
             increment: 25
           });
           

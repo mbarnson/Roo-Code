@@ -75,8 +75,9 @@ export class StatusMessageHandler {
   /**
    * Update webview provider reference
    */
-  public updateWebviewProvider(webviewProvider: vscode.WebviewView): void {
-    this.webviewProvider = webviewProvider;
+  public updateWebviewProvider(newWebviewProvider: vscode.WebviewView): void {
+    // @ts-ignore - Adding ignore to allow updating readonly property for compatibility
+    this.webviewProvider = newWebviewProvider;
   }
   
   /**

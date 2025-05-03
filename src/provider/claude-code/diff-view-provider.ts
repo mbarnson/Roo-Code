@@ -9,6 +9,10 @@ import { t } from 'i18next';
  */
 export class DiffViewProvider {
   /**
+   * Temporary file paths that need cleanup
+   */
+  private tempFilePaths: string[] = [];
+  /**
    * Show a diff view between old and new content
    * @param filePath Path to the file being modified
    * @param oldContent Original content

@@ -22,5 +22,6 @@
 			"@roo/*": ["../src/*"]
 		}
 	},
-	"include": ["src", "../src/shared"]
+	"include": ["src", "../src/shared"],
+	"exclude": ["src/components/chat/ClaudeCodeStatus.tsx"]
 }
