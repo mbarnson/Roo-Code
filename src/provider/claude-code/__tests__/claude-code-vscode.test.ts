@@ -1,150 +1,156 @@
-import * as vscode from 'vscode';
-import { EventEmitter } from 'events';
-import { DiffViewProvider } from '../diff-view-provider';
-import { StatusReporter } from '../status-reporter';
-import type { CompletionResponse, PromptOptions } from '../common-types';
-import type { VsCodeIntegratedClaudeCode } from '../claude-code-vscode';
+import * as vscode from "vscode"
+import { EventEmitter } from "events"
+import { DiffViewProvider } from "../diff-view-provider"
+import { StatusReporter } from "../status-reporter"
+import type { PromptOptions } from "../common-types"
+import type { VsCodeIntegratedClaudeCode } from "../claude-code-vscode"
 
 // Mock dependencies
-jest.mock('vscode', () => ({
-  window: {
-    createStatusBarItem: jest.fn().mockReturnValue({
-      text: '',
-      show: jest.fn(),
-      dispose: jest.fn()
-    }),
-    showErrorMessage: jest.fn(),
-    showInformationMessage: jest.fn().mockResolvedValue('Apply Changes'),
-    showWarningMessage: jest.fn().mockResolvedValue('Delete'),
-    showTextDocument: jest.fn(),
-    withProgress: jest.fn().mockImplementation((_, callback) => callback({
-      report: jest.fn()
-    }, { onCancellationRequested: jest.fn() }))
-  },
-  workspace: {
-    fs: {
-      readFile: jest.fn().mockResolvedValue(Buffer.from('original content')),
-      writeFile: jest.fn().mockResolvedValue(undefined),
-      delete: jest.fn().mockResolvedValue(undefined),
-      rename: jest.fn().mockResolvedValue(undefined),
-      createDirectory: jest.fn().mockResolvedValue(undefined),
-      stat: jest.fn().mockResolvedValue({ type: 1 })
-    },
-    openTextDocument: jest.fn().mockResolvedValue({}),
-  },
-  StatusBarAlignment: {
-    Left: 1
-  },
-  ProgressLocation: {
-    Notification: 1
-  },
-  Uri: {
-    file: jest.fn(path => ({ path }))
-  },
-  commands: {
-    executeCommand: jest.fn()
-  }
-}));
+jest.mock("vscode", () => ({
+	window: {
+		createStatusBarItem: jest.fn().mockReturnValue({
+			text: "",
+			show: jest.fn(),
+			dispose: jest.fn(),
+		}),
+		showErrorMessage: jest.fn(),
+		showInformationMessage: jest.fn().mockResolvedValue("Apply Changes"),
+		showWarningMessage: jest.fn().mockResolvedValue("Delete"),
+		showTextDocument: jest.fn(),
+		withProgress: jest.fn().mockImplementation((_, callback) =>
+			callback(
+				{
+					report: jest.fn(),
+				},
+				{ onCancellationRequested: jest.fn() },
+			),
+		),
+	},
+	workspace: {
+		fs: {
+			readFile: jest.fn().mockResolvedValue(Buffer.from("original content")),
+			writeFile: jest.fn().mockResolvedValue(undefined),
+			delete: jest.fn().mockResolvedValue(undefined),
+			rename: jest.fn().mockResolvedValue(undefined),
+			createDirectory: jest.fn().mockResolvedValue(undefined),
+			stat: jest.fn().mockResolvedValue({ type: 1 }),
+		},
+		openTextDocument: jest.fn().mockResolvedValue({}),
+	},
+	StatusBarAlignment: {
+		Left: 1,
+	},
+	ProgressLocation: {
+		Notification: 1,
+	},
+	Uri: {
+		file: jest.fn((path) => ({ path })),
+	},
+	commands: {
+		executeCommand: jest.fn(),
+	},
+}))
 
 // Mock the ClaudeCodeHandler parent class
-jest.mock('../claude-code', () => ({
-  ClaudeCodeHandler: class {
-    constructor() {}
-    completePrompt = jest.fn().mockResolvedValue({
-      content: 'Response with file operations\n\nwriting to file /test/file.js:\n```\nconst x = 1;\n```\n\nMore text.'
-    })
-  }
-}));
+jest.mock("../claude-code", () => ({
+	ClaudeCodeHandler: class {
+		constructor() {}
+		completePrompt = jest.fn().mockResolvedValue({
+			content:
+				"Response with file operations\n\nwriting to file /test/file.js:\n```\nconst x = 1;\n```\n\nMore text.",
+		})
+	},
+}))
 
 // Mock DiffViewProvider
 const mockDiffViewProvider: DiffViewProvider = {
-  tempFilePaths: [],
-  showDiff: jest.fn().mockResolvedValue(true),
-  cleanupTempFiles: jest.fn()
-};
+	tempFilePaths: [],
+	showDiff: jest.fn().mockResolvedValue(true),
+	cleanupTempFiles: jest.fn(),
+}
 
 // Mock StatusReporter
 // Create a partial mock that extends EventEmitter
 class MockStatusReporter extends EventEmitter implements StatusReporter {
-  statusBarItem = {} as vscode.StatusBarItem;
-  currentStatus: string = 'Idle';
-  messages: Array<{ text: string; level: string; timestamp: Date }> = [];
-  maxMessages: number = 100;
-  
-  updateStatus = jest.fn();
-  showError = jest.fn();
-  showInfo = jest.fn();
-  showWarning = jest.fn();
-  showSuccess = jest.fn();
-  getMessages = jest.fn();
-  getCurrentStatus = jest.fn();
-  clearMessages = jest.fn();
-  dispose = jest.fn();
-  addMessage = jest.fn();
-  reportStatus = jest.fn();
+	statusBarItem = {} as vscode.StatusBarItem
+	currentStatus: string = "Idle"
+	messages: Array<{ text: string; level: string; timestamp: Date }> = []
+	maxMessages: number = 100
+
+	updateStatus = jest.fn()
+	showError = jest.fn()
+	showInfo = jest.fn()
+	showWarning = jest.fn()
+	showSuccess = jest.fn()
+	getMessages = jest.fn()
+	getCurrentStatus = jest.fn()
+	clearMessages = jest.fn()
+	dispose = jest.fn()
+	addMessage = jest.fn()
+	reportStatus = jest.fn()
 }
 
-const mockStatusReporter = new MockStatusReporter() as StatusReporter;
+const mockStatusReporter = new MockStatusReporter() as StatusReporter
 
-describe('VsCodeIntegratedClaudeCode', () => {
-  let claudeCode: VsCodeIntegratedClaudeCode;
-  
-  beforeEach(() => {
-    jest.clearAllMocks();
-    
-    // Since VsCodeIntegratedClaudeCode is now a type, we need to mock it differently
-    claudeCode = {
-      completePrompt: jest.fn().mockResolvedValue({
-        content: 'Mock response'
-      })
-    } as unknown as VsCodeIntegratedClaudeCode;
-  });
-  
-  describe('completePrompt', () => {
-    it('should intercept file operations in the response', async () => {
-      const options: PromptOptions = {
-        prompt: 'Test prompt',
-        modelId: 'claude-3'
-      };
-      
-      const result = await claudeCode.completePrompt(options);
-      
-      // Verify status reporting
-      expect(mockStatusReporter.updateStatus).toHaveBeenCalledWith(expect.stringContaining('Working'));
-      expect(mockStatusReporter.updateStatus).toHaveBeenCalledWith(expect.stringContaining('Idle'));
-      
-      // Verify file operations were intercepted
-      expect(vscode.workspace.fs.writeFile).toHaveBeenCalled();
-      expect(mockStatusReporter.showInfo).toHaveBeenCalled();
-      
-      // Verify response was modified
-      expect(result.content).toContain('File /test/file.js has been updated in VS Code');
-      expect(result.content).not.toContain('writing to file /test/file.js');
-    });
-    
-    it('should handle errors during file operations', async () => {
-      // Mock an error when writing file
-      (vscode.workspace.fs.writeFile as jest.Mock).mockRejectedValueOnce(new Error('Write error'));
-      
-      const options: PromptOptions = {
-        prompt: 'Test prompt',
-        modelId: 'claude-3'
-      };
-      
-      const result = await claudeCode.completePrompt(options);
-      
-      // Verify error handling
-      expect(mockStatusReporter.showError).toHaveBeenCalled();
-      expect(vscode.window.showErrorMessage).toHaveBeenCalled();
-      
-      // Verify response still contains the content
-      expect(result.content).toContain('File /test/file.js has been updated in VS Code');
-    });
-  });
-  
-  describe('parseFileOperationsFromResponse', () => {
-    it('should detect file creations and updates', () => {
-      const response = `Here's the implementation:
+describe("VsCodeIntegratedClaudeCode", () => {
+	let claudeCode: VsCodeIntegratedClaudeCode
+
+	beforeEach(() => {
+		jest.clearAllMocks()
+
+		// Since VsCodeIntegratedClaudeCode is now a type, we need to mock it differently
+		claudeCode = {
+			completePrompt: jest.fn().mockResolvedValue({
+				content: "Mock response",
+			}),
+		} as unknown as VsCodeIntegratedClaudeCode
+	})
+
+	describe("completePrompt", () => {
+		it("should intercept file operations in the response", async () => {
+			const options: PromptOptions = {
+				prompt: "Test prompt",
+				modelId: "claude-3",
+			}
+
+			const result = await claudeCode.completePrompt(options)
+
+			// Verify status reporting
+			expect(mockStatusReporter.updateStatus).toHaveBeenCalledWith(expect.stringContaining("Working"))
+			expect(mockStatusReporter.updateStatus).toHaveBeenCalledWith(expect.stringContaining("Idle"))
+
+			// Verify file operations were intercepted
+			expect(vscode.workspace.fs.writeFile).toHaveBeenCalled()
+			expect(mockStatusReporter.showInfo).toHaveBeenCalled()
+
+			// Verify response was modified
+			expect(result.content).toContain("File /test/file.js has been updated in VS Code")
+			expect(result.content).not.toContain("writing to file /test/file.js")
+		})
+
+		it("should handle errors during file operations", async () => {
+			// Mock an error when writing file
+			;(vscode.workspace.fs.writeFile as jest.Mock).mockRejectedValueOnce(new Error("Write error"))
+
+			const options: PromptOptions = {
+				prompt: "Test prompt",
+				modelId: "claude-3",
+			}
+
+			const result = await claudeCode.completePrompt(options)
+
+			// Verify error handling
+			expect(mockStatusReporter.showError).toHaveBeenCalled()
+			expect(vscode.window.showErrorMessage).toHaveBeenCalled()
+
+			// Verify response still contains the content
+			expect(result.content).toContain("File /test/file.js has been updated in VS Code")
+		})
+	})
+
+	describe("parseFileOperationsFromResponse", () => {
+		it("should detect file creations and updates", () => {
+			const response = `Here's the implementation:
       
 writing to file /test/create.js:
 \`\`\`
@@ -157,86 +163,86 @@ writing to file /test/update.js:
 \`\`\`
 const z = 3;
 \`\`\`
-`;
-      
-      // Use any to access private method
-      const operations = (claudeCode as any).parseFileOperationsFromResponse(response);
-      
-      expect(operations).toHaveLength(2);
-      expect(operations[0].type).toBe('update'); // Mocked to always exist
-      expect(operations[0].path).toBe('/test/create.js');
-      expect(operations[0].content).toBe('const y = 2;');
-      expect(operations[1].type).toBe('update');
-      expect(operations[1].path).toBe('/test/update.js');
-      expect(operations[1].content).toBe('const z = 3;');
-    });
-    
-    it('should detect file deletions', () => {
-      const response = `I'll remove the old file:
+`
+
+			// Use any to access private method
+			const operations = (claudeCode as any).parseFileOperationsFromResponse(response)
+
+			expect(operations).toHaveLength(2)
+			expect(operations[0].type).toBe("update") // Mocked to always exist
+			expect(operations[0].path).toBe("/test/create.js")
+			expect(operations[0].content).toBe("const y = 2;")
+			expect(operations[1].type).toBe("update")
+			expect(operations[1].path).toBe("/test/update.js")
+			expect(operations[1].content).toBe("const z = 3;")
+		})
+
+		it("should detect file deletions", () => {
+			const response = `I'll remove the old file:
       
 deleting file /test/old.js
 
-And then we can continue.`;
-      
-      const operations = (claudeCode as any).parseFileOperationsFromResponse(response);
-      
-      expect(operations).toHaveLength(1);
-      expect(operations[0].type).toBe('delete');
-      expect(operations[0].path).toBe('/test/old.js');
-    });
-    
-    it('should detect file renames', () => {
-      const response = `Let's rename the file to a better name:
+And then we can continue.`
+
+			const operations = (claudeCode as any).parseFileOperationsFromResponse(response)
+
+			expect(operations).toHaveLength(1)
+			expect(operations[0].type).toBe("delete")
+			expect(operations[0].path).toBe("/test/old.js")
+		})
+
+		it("should detect file renames", () => {
+			const response = `Let's rename the file to a better name:
       
 renaming file /test/old-name.js to /test/new-name.js
 
-Now it has a more descriptive name.`;
-      
-      const operations = (claudeCode as any).parseFileOperationsFromResponse(response);
-      
-      expect(operations).toHaveLength(1);
-      expect(operations[0].type).toBe('rename');
-      expect(operations[0].path).toBe('/test/new-name.js');
-      expect(operations[0].oldPath).toBe('/test/old-name.js');
-    });
-  });
-  
-  describe('file operations', () => {
-    it('should create a file and open it in a tab', async () => {
-      await (claudeCode as any).createFile('/test/new-file.js', 'const a = 1;');
-      
-      expect(vscode.workspace.fs.createDirectory).toHaveBeenCalled();
-      expect(vscode.workspace.fs.writeFile).toHaveBeenCalled();
-      expect(vscode.workspace.openTextDocument).toHaveBeenCalled();
-      expect(vscode.window.showTextDocument).toHaveBeenCalled();
-      expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining('Created file'));
-    });
-    
-    it('should update a file with diff view', async () => {
-      await (claudeCode as any).updateFile('/test/existing-file.js', 'const b = 2;');
-      
-      expect(vscode.workspace.fs.readFile).toHaveBeenCalled();
-      expect(mockDiffViewProvider.showDiff).toHaveBeenCalled();
-      expect(vscode.workspace.fs.writeFile).toHaveBeenCalled();
-      expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining('Updated file'));
-    });
-    
-    it('should delete a file with confirmation', async () => {
-      await (claudeCode as any).deleteFile('/test/delete-file.js');
-      
-      expect(vscode.window.showWarningMessage).toHaveBeenCalled();
-      expect(vscode.workspace.fs.delete).toHaveBeenCalled();
-      expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining('Deleted file'));
-    });
-    
-    it('should rename a file', async () => {
-      await (claudeCode as any).renameFile('/test/old-name.js', '/test/new-name.js');
-      
-      expect(vscode.workspace.fs.createDirectory).toHaveBeenCalled();
-      expect(vscode.workspace.fs.rename).toHaveBeenCalled();
-      expect(vscode.workspace.openTextDocument).toHaveBeenCalled();
-      expect(vscode.window.showTextDocument).toHaveBeenCalled();
-      expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining('Renamed file'));
-    });
-  });
-});
+Now it has a more descriptive name.`
+
+			const operations = (claudeCode as any).parseFileOperationsFromResponse(response)
+
+			expect(operations).toHaveLength(1)
+			expect(operations[0].type).toBe("rename")
+			expect(operations[0].path).toBe("/test/new-name.js")
+			expect(operations[0].oldPath).toBe("/test/old-name.js")
+		})
+	})
+
+	describe("file operations", () => {
+		it("should create a file and open it in a tab", async () => {
+			await (claudeCode as any).createFile("/test/new-file.js", "const a = 1;")
+
+			expect(vscode.workspace.fs.createDirectory).toHaveBeenCalled()
+			expect(vscode.workspace.fs.writeFile).toHaveBeenCalled()
+			expect(vscode.workspace.openTextDocument).toHaveBeenCalled()
+			expect(vscode.window.showTextDocument).toHaveBeenCalled()
+			expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining("Created file"))
+		})
+
+		it("should update a file with diff view", async () => {
+			await (claudeCode as any).updateFile("/test/existing-file.js", "const b = 2;")
+
+			expect(vscode.workspace.fs.readFile).toHaveBeenCalled()
+			expect(mockDiffViewProvider.showDiff).toHaveBeenCalled()
+			expect(vscode.workspace.fs.writeFile).toHaveBeenCalled()
+			expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining("Updated file"))
+		})
+
+		it("should delete a file with confirmation", async () => {
+			await (claudeCode as any).deleteFile("/test/delete-file.js")
+
+			expect(vscode.window.showWarningMessage).toHaveBeenCalled()
+			expect(vscode.workspace.fs.delete).toHaveBeenCalled()
+			expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining("Deleted file"))
+		})
+
+		it("should rename a file", async () => {
+			await (claudeCode as any).renameFile("/test/old-name.js", "/test/new-name.js")
+
+			expect(vscode.workspace.fs.createDirectory).toHaveBeenCalled()
+			expect(vscode.workspace.fs.rename).toHaveBeenCalled()
+			expect(vscode.workspace.openTextDocument).toHaveBeenCalled()
+			expect(vscode.window.showTextDocument).toHaveBeenCalled()
+			expect(mockStatusReporter.showInfo).toHaveBeenCalledWith(expect.stringContaining("Renamed file"))
+		})
+	})
+})
