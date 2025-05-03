@@ -181,6 +181,21 @@
 			"description": "No API key is required, but the user needs to help copy and paste the information to the web chat AI.",
 			"instructions": "During use, a dialog box will pop up and the current message will be copied to the clipboard automatically. You need to paste these to web versions of AI (such as ChatGPT or Claude), then copy the AI's reply back to the dialog box and click the confirm button."
 		},
+		"claudeCode": {
+			"title": "Claude Code",
+			"description": "Use Claude Code CLI to interact with Claude's AI models.",
+			"cliPath": "Claude Code CLI Path",
+			"cliPathDescription": "Path to the Claude Code CLI executable. Leave blank if 'claude-code' is in your PATH.",
+			"authRequired": "Authentication Required",
+			"authInstructions": "Before using Claude Code as a provider, you must:",
+			"installCli": "Install the Claude Code CLI from",
+			"loginCommand": "Run <code>claude-code login</code> in your terminal",
+			"verifyCommand": "Verify it works by running <code>claude-code chat</code>",
+			"authNote": "Roo Code will check your authentication status automatically when using this provider.",
+			"vsCodeIntegration": "Enable VS Code Integration",
+			"vsCodeIntegrationTooltip": "Integrate Claude Code with VS Code's editor APIs for file operations, tracking, and diff UI",
+			"vsCodeIntegrationDescription": "VS Code integration ensures Claude Code operations are properly integrated with VS Code's editor APIs, file tracking, and diff views. This provides a consistent experience with other providers."
+		},
 		"openRouter": {
 			"providerRouting": {
 				"title": "OpenRouter Provider Routing",

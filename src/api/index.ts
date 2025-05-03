@@ -1,5 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { BetaThinkingConfigParam } from "@anthropic-ai/sdk/resources/beta/messages/index.mjs"
+import * as vscode from "vscode"
 
 import { ApiConfiguration, ModelInfo, ApiHandlerOptions } from "../shared/api"
 import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "./providers/constants"
@@ -23,6 +24,11 @@ import { RequestyHandler } from "./providers/requesty"
 import { HumanRelayHandler } from "./providers/human-relay"
 import { FakeAIHandler } from "./providers/fake-ai"
 import { XAIHandler } from "./providers/xai"
+import { ClaudeCodeHandler } from "./providers/claude-code"
+import { createVsCodeIntegratedClaudeCode } from "./providers/claude-code-vscode"
+import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
+import { FileContextTracker } from "../core/context-tracking/FileContextTracker"
+import { ClineProvider } from "../core/webview/ClineProvider"
 
 export interface SingleCompletionHandler {
 	completePrompt(prompt: string): Promise<string>
@@ -44,7 +50,10 @@ export interface ApiHandler {
 	countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number>
 }
 
-export function buildApiHandler(configuration: ApiConfiguration): ApiHandler {
+export function buildApiHandler(
+	configuration: ApiConfiguration, 
+	clineProvider?: ClineProvider
+): ApiHandler {
 	const { apiProvider, ...options } = configuration
 
 	switch (apiProvider) {
@@ -88,6 +97,44 @@ export function buildApiHandler(configuration: ApiConfiguration): ApiHandler {
 			return new FakeAIHandler(options)
 		case "xai":
 			return new XAIHandler(options)
+		case "claude-code":
+			// If VS Code integration is possible (clineProvider is available), use the VS Code integrated handler
+			if (clineProvider) {
+				const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ""
+				const diffViewProvider = new DiffViewProvider(cwd)
+				// We need to safely extract the fileContextTracker from the clineProvider
+				const fileContextTracker = clineProvider.workspaceTracker ? 
+					new FileContextTracker(clineProvider, clineProvider.getCurrentCline()?.taskId || "") : 
+					undefined
+                
+				if (fileContextTracker) {
+					return createVsCodeIntegratedClaudeCode(
+						{
+							claudeCodePath: options.claudeCodePath,
+							claudeCodeModelId: options.claudeCodeModelId,
+							modelTemperature: options.modelTemperature === null ? undefined : options.modelTemperature,
+							includeMaxTokens: options.includeMaxTokens,
+							modelMaxTokens: options.modelMaxTokens,
+							modelMaxThinkingTokens: options.modelMaxThinkingTokens,
+							reasoningEffort: options.reasoningEffort,
+						},
+						diffViewProvider,
+						fileContextTracker,
+						cwd
+					)
+				}
+			}
+            
+			// Fall back to direct ClaudeCodeHandler if VS Code integration is not possible
+			return new ClaudeCodeHandler({
+				claudeCodePath: options.claudeCodePath,
+				claudeCodeModelId: options.claudeCodeModelId,
+				modelTemperature: options.modelTemperature === null ? undefined : options.modelTemperature,
+				includeMaxTokens: options.includeMaxTokens,
+				modelMaxTokens: options.modelMaxTokens,
+				modelMaxThinkingTokens: options.modelMaxThinkingTokens,
+				reasoningEffort: options.reasoningEffort,
+			})
 		default:
 			return new AnthropicHandler(options)
 	}

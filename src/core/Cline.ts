@@ -241,7 +241,7 @@ export class Cline extends EventEmitter<ClineEvents> {
 		})
 
 		this.apiConfiguration = apiConfiguration
-		this.api = buildApiHandler(apiConfiguration)
+		this.api = buildApiHandler(apiConfiguration, provider)
 		this.promptCacheKey = crypto.randomUUID()
 
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)

@@ -824,7 +824,7 @@ export class ClineProvider extends EventEmitter<ClineProviderEvents> implements 
 		await this.contextProxy.setProviderSettings(providerSettings)
 
 		if (this.getCurrentCline()) {
-			this.getCurrentCline()!.api = buildApiHandler(providerSettings)
+			this.getCurrentCline()!.api = buildApiHandler(providerSettings, this)
 		}
 	}
 

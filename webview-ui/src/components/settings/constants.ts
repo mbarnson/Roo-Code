@@ -15,6 +15,61 @@ export { REASONING_MODELS, PROMPT_CACHING_MODELS } from "@roo/shared/api"
 
 export { AWS_REGIONS } from "@roo/shared/aws_regions"
 
+// Define Claude Code models
+export const claudeCodeModels: Record<string, ModelInfo> = {
+	"claude-3-opus-20240229": {
+		maxTokens: 4096,
+		contextWindow: 200000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		supportsComputerUse: true,
+		inputPrice: 15,
+		outputPrice: 75,
+		description: "Claude 3 Opus - The most powerful Claude model",
+	},
+	"claude-3-sonnet-20240229": {
+		maxTokens: 4096,
+		contextWindow: 200000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		supportsComputerUse: true,
+		inputPrice: 3,
+		outputPrice: 15,
+		description: "Claude 3 Sonnet - Balance of intelligence and speed",
+	},
+	"claude-3-haiku-20240307": {
+		maxTokens: 4096,
+		contextWindow: 200000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		supportsComputerUse: true,
+		inputPrice: 0.25,
+		outputPrice: 1.25,
+		description: "Claude 3 Haiku - Fastest Claude model",
+	},
+	"claude-3-5-sonnet-20240620": {
+		maxTokens: 4096,
+		contextWindow: 200000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		supportsComputerUse: true,
+		inputPrice: 3,
+		outputPrice: 15,
+		description: "Claude 3.5 Sonnet - More capable and faster",
+	},
+	"claude-3-7-sonnet-20250219": {
+		maxTokens: 4096,
+		contextWindow: 200000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		supportsComputerUse: true,
+		thinking: true,
+		inputPrice: 3,
+		outputPrice: 15, 
+		description: "Claude 3.7 Sonnet - With thinking capability",
+	},
+}
+
 export const MODELS_BY_PROVIDER: Partial<Record<ApiProvider, Record<string, ModelInfo>>> = {
 	anthropic: anthropicModels,
 	bedrock: bedrockModels,
@@ -24,6 +79,7 @@ export const MODELS_BY_PROVIDER: Partial<Record<ApiProvider, Record<string, Mode
 	"openai-native": openAiNativeModels,
 	vertex: vertexModels,
 	xai: xaiModels,
+	"claude-code": claudeCodeModels,
 }
 
 export const PROVIDERS = [
@@ -44,6 +100,7 @@ export const PROVIDERS = [
 	{ value: "requesty", label: "Requesty" },
 	{ value: "human-relay", label: "Human Relay" },
 	{ value: "xai", label: "xAI" },
+	{ value: "claude-code", label: "Claude Code CLI" },
 ].sort((a, b) => a.label.localeCompare(b.label))
 
 export const VERTEX_REGIONS = [

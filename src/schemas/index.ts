@@ -29,6 +29,7 @@ export const providerNames = [
 	"human-relay",
 	"fake-ai",
 	"xai",
+	"claude-code",
 ] as const
 
 export const providerNamesSchema = z.enum(providerNames)
@@ -423,6 +424,10 @@ export const providerSettingsSchema = z.object({
 	requestyModelId: z.string().optional(),
 	// X.AI (Grok)
 	xaiApiKey: z.string().optional(),
+	// Claude Code
+	claudeCodePath: z.string().optional(),
+	claudeCodeModelId: z.string().optional(),
+	claudeCodeVsCodeIntegration: z.boolean().optional(),
 	// Claude 3.7 Sonnet Thinking
 	modelMaxTokens: z.number().optional(),
 	modelMaxThinkingTokens: z.number().optional(),
@@ -514,6 +519,10 @@ const providerSettingsRecord: ProviderSettingsRecord = {
 	// Requesty
 	requestyApiKey: undefined,
 	requestyModelId: undefined,
+	// Claude Code
+	claudeCodePath: undefined,
+	claudeCodeModelId: undefined,
+	claudeCodeVsCodeIntegration: undefined,
 	// Claude 3.7 Sonnet Thinking
 	modelMaxTokens: undefined,
 	modelMaxThinkingTokens: undefined,

@@ -51,7 +51,18 @@
 		"failed_remove_directory": "Failed to remove task directory: {{error}}",
 		"custom_storage_path_unusable": "Custom storage path \"{{path}}\" is unusable, will use default path",
 		"cannot_access_path": "Cannot access path {{path}}: {{error}}",
-		"failed_update_project_mcp": "Failed to update project MCP servers"
+		"failed_update_project_mcp": "Failed to update project MCP servers",
+		"claude_code": {
+			"unknown": "Claude Code {{operation}} error: Unknown error occurred",
+			"not_found": "Claude Code {{operation}} error: Claude Code CLI not found. Make sure it's installed and in your PATH, or specify the full path in settings.",
+			"permission_denied": "Claude Code {{operation}} error: Permission denied. Check file permissions for Claude Code CLI.",
+			"timeout": "Claude Code {{operation}} error: Operation timed out. The Claude Code CLI took too long to respond.",
+			"auth_failed": "Claude Code {{operation}} error: Not authenticated with Claude Code CLI. Please run 'claude-code login' in your terminal.",
+			"general": "Claude Code {{operation}} error: {{message}}",
+			"file_modified": "Claude Code modified {{fileName}}. Review the changes in the diff view.",
+			"keep_changes": "Keep Changes",
+			"revert_changes": "Revert Changes"
+		}
 	},
 	"warnings": {
 		"no_terminal_content": "No terminal content selected",
