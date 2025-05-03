@@ -25,10 +25,12 @@ import { HumanRelayHandler } from "./providers/human-relay"
 import { FakeAIHandler } from "./providers/fake-ai"
 import { XAIHandler } from "./providers/xai"
 import { ClaudeCodeHandler } from "./providers/claude-code"
+import { ClaudeCodeCommandOptions } from "./providers/models/claude-code-models"
 import { createVsCodeIntegratedClaudeCode } from "./providers/claude-code-vscode"
+import { CreateVsCodeIntegratedClaudeCodeOptions } from "./providers/models/claude-code-vscode-types"
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
-import { FileContextTracker } from "../core/context-tracking/FileContextTracker"
 import { ClineProvider } from "../core/webview/ClineProvider"
+import { createFileContextTracker } from "./providers/models/cline-provider-types"
 
 export interface SingleCompletionHandler {
 	completePrompt(prompt: string): Promise<string>
@@ -50,10 +52,7 @@ export interface ApiHandler {
 	countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number>
 }
 
-export function buildApiHandler(
-	configuration: ApiConfiguration, 
-	clineProvider?: ClineProvider
-): ApiHandler {
+export function buildApiHandler(configuration: ApiConfiguration, clineProvider?: ClineProvider): ApiHandler {
 	const { apiProvider, ...options } = configuration
 
 	switch (apiProvider) {
@@ -98,35 +97,8 @@ export function buildApiHandler(
 		case "xai":
 			return new XAIHandler(options)
 		case "claude-code":
-			// If VS Code integration is possible (clineProvider is available), use the VS Code integrated handler
-			if (clineProvider) {
-				const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ""
-				const diffViewProvider = new DiffViewProvider(cwd)
-				// We need to safely extract the fileContextTracker from the clineProvider
-				const fileContextTracker = clineProvider.workspaceTracker ? 
-					new FileContextTracker(clineProvider, clineProvider.getCurrentCline()?.taskId || "") : 
-					undefined
-                
-				if (fileContextTracker) {
-					return createVsCodeIntegratedClaudeCode(
-						{
-							claudeCodePath: options.claudeCodePath,
-							claudeCodeModelId: options.claudeCodeModelId,
-							modelTemperature: options.modelTemperature === null ? undefined : options.modelTemperature,
-							includeMaxTokens: options.includeMaxTokens,
-							modelMaxTokens: options.modelMaxTokens,
-							modelMaxThinkingTokens: options.modelMaxThinkingTokens,
-							reasoningEffort: options.reasoningEffort,
-						},
-						diffViewProvider,
-						fileContextTracker,
-						cwd
-					)
-				}
-			}
-            
-			// Fall back to direct ClaudeCodeHandler if VS Code integration is not possible
-			return new ClaudeCodeHandler({
+			// Create Claude Code command options with proper type safety
+			const claudeCodeOptions: ClaudeCodeCommandOptions = {
 				claudeCodePath: options.claudeCodePath,
 				claudeCodeModelId: options.claudeCodeModelId,
 				modelTemperature: options.modelTemperature === null ? undefined : options.modelTemperature,
@@ -134,12 +106,54 @@ export function buildApiHandler(
 				modelMaxTokens: options.modelMaxTokens,
 				modelMaxThinkingTokens: options.modelMaxThinkingTokens,
 				reasoningEffort: options.reasoningEffort,
-			})
+			}
+
+			// If VS Code integration is possible (clineProvider is available), use the VS Code integrated handler
+			if (clineProvider) {
+				const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ""
+
+				// Create the diff view provider
+				const diffViewProvider = new DiffViewProvider(cwd)
+
+				// Create file context tracker safely
+				const fileContextTracker = createFileContextTracker(clineProvider)
+
+				// Only use VS Code integration if fileContextTracker is available
+				if (fileContextTracker) {
+					// Create the VS Code integration options
+					const vsCodeOptions: CreateVsCodeIntegratedClaudeCodeOptions = {
+						...claudeCodeOptions,
+						claudeCodeVsCodeIntegration: true,
+						claudeCodeFileTracking: true,
+						claudeCodeShowDiffViews: true,
+						cwd,
+					}
+
+					// Create and return the VS Code integrated handler
+					return createVsCodeIntegratedClaudeCode(vsCodeOptions, diffViewProvider, fileContextTracker, cwd)
+				}
+			}
+
+			// Fall back to direct ClaudeCodeHandler if VS Code integration is not possible
+			return new ClaudeCodeHandler(claudeCodeOptions)
 		default:
 			return new AnthropicHandler(options)
 	}
 }
 
+/**
+ * Model parameters configuration
+ */
+export interface ModelParameters {
+	maxTokens?: number
+	thinking?: BetaThinkingConfigParam
+	temperature: number
+	reasoningEffort?: "low" | "medium" | "high"
+}
+
+/**
+ * Get model parameters based on model info and options
+ */
 export function getModelParams({
 	options,
 	model,
@@ -152,7 +166,8 @@ export function getModelParams({
 	defaultMaxTokens?: number
 	defaultTemperature?: number
 	defaultReasoningEffort?: "low" | "medium" | "high"
-}) {
+}): ModelParameters {
+	// Extract options with safe default values
 	const {
 		modelMaxTokens: customMaxTokens,
 		modelMaxThinkingTokens: customMaxThinkingTokens,
@@ -160,20 +175,34 @@ export function getModelParams({
 		reasoningEffort: customReasoningEffort,
 	} = options
 
+	// Initialize with defaults and non-null values
 	let maxTokens = model.maxTokens ?? defaultMaxTokens
 	let thinking: BetaThinkingConfigParam | undefined = undefined
 	let temperature = customTemperature ?? defaultTemperature
 	const reasoningEffort = customReasoningEffort ?? defaultReasoningEffort
 
-	if (model.thinking) {
+	// Handle thinking models (Claude 3.7+)
+	if (model.thinking === true) {
 		// Only honor `customMaxTokens` for thinking models.
 		maxTokens = customMaxTokens ?? maxTokens
 
+		// Use a safe default for max tokens if still undefined
+		const effectiveMaxTokens = maxTokens || ANTHROPIC_DEFAULT_MAX_TOKENS
+
 		// Clamp the thinking budget to be at most 80% of max tokens and at
 		// least 1024 tokens.
-		const maxBudgetTokens = Math.floor((maxTokens || ANTHROPIC_DEFAULT_MAX_TOKENS) * 0.8)
-		const budgetTokens = Math.max(Math.min(customMaxThinkingTokens ?? maxBudgetTokens, maxBudgetTokens), 1024)
-		thinking = { type: "enabled", budget_tokens: budgetTokens }
+		const maxBudgetTokens = Math.floor(effectiveMaxTokens * 0.8)
+
+		// Safely determine the budget tokens
+		const defaultBudget = maxBudgetTokens
+		const requestedBudget = customMaxThinkingTokens ?? defaultBudget
+		const clampedBudget = Math.min(requestedBudget, maxBudgetTokens)
+		const finalBudget = Math.max(clampedBudget, 1024)
+
+		thinking = {
+			type: "enabled",
+			budget_tokens: finalBudget,
+		}
 
 		// Anthropic "Thinking" models require a temperature of 1.0.
 		temperature = 1.0
