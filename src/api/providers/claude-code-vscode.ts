@@ -9,6 +9,13 @@ import { DiffViewProvider } from "../../integrations/editor/DiffViewProvider"
 import { FileContextTracker } from "../../core/context-tracking/FileContextTracker"
 import { FileDetector } from "./utils/file-detector"
 import { t } from "../../i18n"
+import {
+	VsCodeIntegratedClaudeCodeOptions,
+	FileModificationsMap,
+	ErrorFormattingOperation,
+	ProgressResolver,
+	CreateVsCodeIntegratedClaudeCodeOptions,
+} from "./models/claude-code-vscode-types"
 
 /**
  * VS Code integrated wrapper for the Claude Code CLI provider
@@ -38,19 +45,18 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 	 * @param cwd Current working directory
 	 */
 	constructor(
-		options: {
-			claudeCodePath?: string
-			claudeCodeModelId?: string
-			modelTemperature?: number
-			includeMaxTokens?: boolean
-			modelMaxTokens?: number
-			modelMaxThinkingTokens?: number
-			reasoningEffort?: "low" | "medium" | "high"
-			claudeCodeVsCodeIntegration?: boolean
-		},
+		options: VsCodeIntegratedClaudeCodeOptions,
 		private cwd: string = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
 	) {
-		this.cliHandler = new ClaudeCodeHandler(options)
+		this.cliHandler = new ClaudeCodeHandler({
+			claudeCodePath: options.claudeCodePath,
+			claudeCodeModelId: options.claudeCodeModelId,
+			modelTemperature: options.modelTemperature,
+			includeMaxTokens: options.includeMaxTokens,
+			modelMaxTokens: options.modelMaxTokens,
+			modelMaxThinkingTokens: options.modelMaxThinkingTokens,
+			reasoningEffort: options.reasoningEffort,
+		})
 
 		// Default to enabled unless explicitly disabled
 		this.vsCodeIntegrationEnabled = options.claudeCodeVsCodeIntegration !== false
@@ -76,8 +82,8 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 	 * @param operation Description of the operation that failed
 	 * @returns A formatted error message for display
 	 */
-	private formatErrorMessage(error: unknown, operation: string): string {
-		if (!error) {
+	private formatErrorMessage(error: unknown, operation: ErrorFormattingOperation): string {
+		if (error === null || error === undefined) {
 			return t("common:errors.claude_code.unknown", { operation })
 		}
 
@@ -220,7 +226,7 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 	 * Hide progress indicator
 	 * This is overwritten by showProgress to resolve the promise
 	 */
-	private hideProgress: () => void = () => {
+	private hideProgress: ProgressResolver = () => {
 		/* No-op default implementation */
 	}
 
@@ -231,7 +237,7 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 	 */
 	private trackFileMentions(text: string): void {
 		// Skip if VS Code integration is disabled or tracking isn't available
-		if (!this.fileContextTracker || !this.vsCodeIntegrationEnabled) return
+		if (!this.fileContextTracker || !this.vsCodeIntegrationEnabled || !text) return
 
 		// Use file detector to extract file paths
 		const filePaths = this.fileDetector.detectFilePaths(text)
@@ -246,7 +252,7 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 						this.fileContextTracker.trackFileContext(absolutePath, "file_mentioned")
 					}
 				},
-				() => {
+				(_error) => {
 					// File doesn't exist, do nothing
 				},
 			)
@@ -260,7 +266,10 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 	 * @param text Text to scan for file modifications
 	 * @param fileModifications Map to accumulate detected modifications
 	 */
-	private detectFileModifications(text: string, fileModifications: Map<string, string>): void {
+	private detectFileModifications(text: string, fileModifications: FileModificationsMap): void {
+		// Skip if text is empty or fileModifications is not a map
+		if (!text || !(fileModifications instanceof Map)) return
+
 		// Use file detector to identify potential file modifications
 		this.fileDetector.detectFileModifications(text, fileModifications)
 	}
@@ -271,11 +280,19 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 	 * @param fileModifications Map of detected file modifications with paths as keys
 	 * @returns Promise that resolves when processing is complete
 	 */
-	private async processDetectedFileModifications(fileModifications: Map<string, string>): Promise<void> {
+	private async processDetectedFileModifications(fileModifications: FileModificationsMap): Promise<void> {
 		// Skip if VS Code integration is disabled, diff provider isn't available, or no modifications
-		if (!this.diffViewProvider || fileModifications.size === 0 || !this.vsCodeIntegrationEnabled) return
+		if (
+			!this.diffViewProvider ||
+			!fileModifications ||
+			fileModifications.size === 0 ||
+			!this.vsCodeIntegrationEnabled
+		)
+			return
 
-		for (const [filePath, _] of fileModifications) {
+		for (const [filePath, _originalPath] of fileModifications) {
+			if (!filePath) continue
+
 			try {
 				// Resolve the absolute path
 				const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.cwd, filePath)
@@ -305,9 +322,10 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 				const diffViewProvider = this.diffViewProvider
 
 				// Show a message that file modifications were detected
+				const fileName = path.basename(absolutePath)
 				await vscode.window
 					.showInformationMessage(
-						t("common:errors.claude_code.file_modified", { fileName: path.basename(absolutePath) }),
+						t("common:errors.claude_code.file_modified", { fileName }),
 						t("common:errors.claude_code.keep_changes"),
 						t("common:errors.claude_code.revert_changes"),
 					)
@@ -326,46 +344,67 @@ export class VsCodeIntegratedClaudeCode implements ApiHandler, SingleCompletionH
 
 	/**
 	 * Check if a file exists
+	 * @param filePath Absolute path to check
+	 * @returns Promise that resolves to true if file exists, false otherwise
 	 */
 	private async fileExists(filePath: string): Promise<boolean> {
+		if (!filePath) return false
+
 		try {
 			await vscode.workspace.fs.stat(vscode.Uri.file(filePath))
 			return true
-		} catch {
+		} catch (_error) {
 			return false
 		}
 	}
 
 	/**
 	 * Read a file's content
+	 * @param filePath Absolute path to the file to read
+	 * @returns Promise that resolves to the file content as a string
+	 * @throws Error if file cannot be read
 	 */
 	private async readFile(filePath: string): Promise<string> {
-		const content = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath))
-		return Buffer.from(content).toString("utf8")
+		if (!filePath) {
+			throw new Error("Invalid file path: file path is empty")
+		}
+
+		try {
+			const content = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath))
+			return Buffer.from(content).toString("utf8")
+		} catch (error) {
+			throw new Error(`Error reading file ${filePath}: ${error instanceof Error ? error.message : String(error)}`)
+		}
 	}
 }
 
 /**
  * Factory function to create a VS Code integrated Claude Code handler
+ *
+ * @param options Configuration options for the provider
+ * @param diffViewProvider VS Code diff view provider for file changes
+ * @param fileContextTracker File context tracker for file mentions
+ * @param cwd Current working directory (defaults to first workspace folder)
+ * @returns Initialized VS Code integrated Claude Code handler
  */
 export function createVsCodeIntegratedClaudeCode(
-	options: {
-		claudeCodePath?: string
-		claudeCodeModelId?: string
-		modelTemperature?: number
-		includeMaxTokens?: boolean
-		modelMaxTokens?: number
-		modelMaxThinkingTokens?: number
-		reasoningEffort?: "low" | "medium" | "high"
-		claudeCodeVsCodeIntegration?: boolean
-		claudeCodeFileTracking?: boolean
-		claudeCodeShowDiffViews?: boolean
-	},
+	options: CreateVsCodeIntegratedClaudeCodeOptions,
 	diffViewProvider: DiffViewProvider,
 	fileContextTracker: FileContextTracker,
 	cwd: string = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
 ): VsCodeIntegratedClaudeCode {
-	const handler = new VsCodeIntegratedClaudeCode(options, cwd)
+	if (!diffViewProvider) {
+		throw new Error("diffViewProvider is required for Claude Code VS Code integration")
+	}
+
+	if (!fileContextTracker) {
+		throw new Error("fileContextTracker is required for Claude Code VS Code integration")
+	}
+
+	// Use configured CWD or default to workspace folder
+	const workingDir = options.cwd || cwd
+
+	const handler = new VsCodeIntegratedClaudeCode(options, workingDir)
 	handler.initialize(diffViewProvider, fileContextTracker)
 	return handler
 }
