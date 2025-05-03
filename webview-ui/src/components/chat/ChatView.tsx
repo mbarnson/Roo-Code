@@ -37,6 +37,7 @@ import BrowserSessionRow from "./BrowserSessionRow"
 import ChatRow from "./ChatRow"
 import ChatTextArea from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
+import ClaudeCodeStatus from "./ClaudeCodeStatus"
 import AutoApproveMenu from "./AutoApproveMenu"
 import SystemPromptWarning from "./SystemPromptWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
@@ -530,7 +531,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const handleTaskCloseButtonClick = useCallback(() => startNewTask(), [startNewTask])
 
-	const { info: model } = useSelectedModel(apiConfiguration)
+	const { info: model, provider: selectedProvider } = useSelectedModel(apiConfiguration)
+	const isClaudeCode = selectedProvider === "claude-code"
 
 	const selectImages = useCallback(() => vscode.postMessage({ type: "selectImages" }), [])
 
@@ -1203,6 +1205,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						contextTokens={apiMetrics.contextTokens}
 						onClose={handleTaskCloseButtonClick}
 					/>
+					
+					{isClaudeCode && <ClaudeCodeStatus />}
 
 					{hasSystemPromptOverride && (
 						<div className="px-3">
