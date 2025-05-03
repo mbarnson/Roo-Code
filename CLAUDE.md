@@ -101,10 +101,33 @@ The main issue remaining is that Claude Code CLI directly modifies files rather 
 
 Reference documentation: VSCODE_INTEGRATION.md for detailed design
 
+## Critical PR Review Issues
+
+See CLAUDE_PR_TASKS.md for a detailed list of issues that need to be addressed before this PR can be merged. Key areas requiring attention:
+
+1. **Code Duplication**: Refactor UI components in ApiOptions.tsx to reduce duplication
+2. **Type Safety**: Fix unsafe type operations and improve type definitions
+3. **Test Coverage**: Add tests for error handling, edge cases, and VS Code integration
+4. **VS Code Integration**: Complete file operation interception and tab management
+5. **Performance**: Optimize token counting and add caching for model information
+6. **Error Handling**: Improve error propagation and user feedback
+7. **Security**: Strengthen path validation and file permission checks
+8. **Documentation**: Add comprehensive API and user documentation
+9. **Model Definitions**: Centralize model definitions to avoid duplication
+10. **Implementation Completeness**: Finish all planned features and remove TODOs
+
 ## Code Issues
 
 Any syntax errors in the edited files need to be fixed:
 
 1. waitForAuthentication method may need adjustment to handle yield correctly
-2. UI duplication in ApiOptions.tsx
+2. UI duplication in ApiOptions.tsx 
 3. Fix pre-commit hook issues with generated files
+
+## Development Environment
+
+- **Operating System**: macOS (BSD-based)
+- **Note**: When using command-line tools, use macOS compatible variants of commands. For example:
+  - Use `sed` with BSD syntax, not GNU syntax
+  - Avoid Linux-specific options that aren't available on macOS
+  - Test commands locally before using them in scripts

@@ -54,6 +54,10 @@ import { PromptCachingControl } from "./PromptCachingControl"
 import { DiffSettingsControl } from "./DiffSettingsControl"
 import { TemperatureControl } from "./TemperatureControl"
 import { RateLimitSecondsControl } from "./RateLimitSecondsControl"
+import { AuthenticationBlock } from "./AuthenticationBlock"
+import { ModelSelectionBlock } from "./ModelSelectionBlock"
+import { ThinkingBudgetHelper } from "./ThinkingBudgetHelper"
+import { ProviderOptionsBlock } from "./ProviderOptionsBlock"
 
 export interface ApiOptionsProps {
 	uriScheme: string | undefined
@@ -1656,40 +1660,43 @@ const ApiOptions = ({
 						{t("settings:providers.claudeCode.cliPathDescription")}
 					</div>
 					
-					<div 
-						className="my-2 p-3 text-sm rounded"
-						style={{
-							backgroundColor: "var(--vscode-inputValidation-infoBackground)",
-							color: "var(--vscode-inputValidation-infoForeground)",
-							border: "1px solid var(--vscode-inputValidation-infoBorder)",
-						}}>
-						<div className="font-semibold mb-1">🔑 {t("settings:providers.claudeCode.authRequired")}</div>
-						<p className="mb-2">{t("settings:providers.claudeCode.authInstructions")}</p>
-						<ol className="list-decimal ml-5 mb-2">
-							<li className="mb-1">{t("settings:providers.claudeCode.installCli")}{" "}
-								<VSCodeLink href="https://claude.ai/code" className="text-sm font-medium">
-									claude.ai/code
-								</VSCodeLink>
-							</li>
-							<li className="mb-1">
-								<Trans
-									i18nKey="settings:providers.claudeCode.loginCommand"
-									components={{
-										code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white"/>
-									}}
-								/>
-							</li>
-							<li>
-								<Trans
-									i18nKey="settings:providers.claudeCode.verifyCommand"
-									components={{
-										code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white"/>
-									}}
-								/>
-							</li>
-						</ol>
-						<p className="text-xs">{t("settings:providers.claudeCode.authNote")}</p>
-					</div>
+					<AuthenticationBlock
+						title={`🔑 ${t("settings:providers.claudeCode.authRequired")}`}
+						instructions={t("settings:providers.claudeCode.authInstructions")}
+						steps={[
+							{
+								content: (
+									<>
+										{t("settings:providers.claudeCode.installCli")}{" "}
+										<VSCodeLink href="https://claude.ai/code" className="text-sm font-medium">
+											claude.ai/code
+										</VSCodeLink>
+									</>
+								)
+							},
+							{
+								content: (
+									<Trans
+										i18nKey="settings:providers.claudeCode.loginCommand"
+										components={{
+											code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white"/>
+										}}
+									/>
+								)
+							},
+							{
+								content: (
+									<Trans
+										i18nKey="settings:providers.claudeCode.verifyCommand"
+										components={{
+											code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white"/>
+										}}
+									/>
+								)
+							}
+						]}
+						note={t("settings:providers.claudeCode.authNote")}
+					/>
 			        
 			        <div className="mt-4">
 			            <div className="flex flex-col gap-2">
@@ -1711,39 +1718,23 @@ const ApiOptions = ({
 			            </div>
 			        </div>
 
-					<div>
-						<label className="block font-medium mb-1">{t("settings:providers.model")}</label>
-						<Select 
-							value={apiConfiguration?.claudeCodeModelId || "claude-3-sonnet-20240229"}
-							onValueChange={(value) => setApiConfigurationField("claudeCodeModelId", value)}>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder={t("settings:common.select")} />
-							</SelectTrigger>
-							<SelectContent>
-								{Object.keys(claudeCodeModels).map((modelId) => (
-									<SelectItem key={modelId} value={modelId}>
-										{modelId}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-					<ModelInfoView
+					<ModelSelectionBlock
 						apiProvider={selectedProvider}
-						selectedModelId={apiConfiguration?.claudeCodeModelId || "claude-3-sonnet-20240229"}
-						modelInfo={claudeCodeModels[apiConfiguration?.claudeCodeModelId || "claude-3-sonnet-20240229"]}
+						modelId={apiConfiguration?.claudeCodeModelId || ""}
+						defaultModelId="claude-3-sonnet-20240229"
+						models={claudeCodeModels}
+						onModelChange={(value) => setApiConfigurationField("claudeCodeModelId", value)}
 						isDescriptionExpanded={isDescriptionExpanded}
 						setIsDescriptionExpanded={setIsDescriptionExpanded}
 					/>
 					
-					{(apiConfiguration?.claudeCodeModelId || "").includes("3-7") && (
-						<ThinkingBudget
-							key={`claude-code-${apiConfiguration?.claudeCodeModelId}`}
-							apiConfiguration={apiConfiguration}
-							setApiConfigurationField={setApiConfigurationField}
-							modelInfo={claudeCodeModels[apiConfiguration?.claudeCodeModelId || "claude-3-7-sonnet-20250219"]}
-						/>
-					)}
+					<ThinkingBudgetHelper
+						provider={selectedProvider}
+						modelId={apiConfiguration?.claudeCodeModelId || ""}
+						modelInfo={claudeCodeModels[apiConfiguration?.claudeCodeModelId || "claude-3-sonnet-20240229"]}
+						apiConfiguration={apiConfiguration}
+						setApiConfigurationField={setApiConfigurationField}
+					/>
 				</>
 			)}
 
@@ -1929,11 +1920,12 @@ const ApiOptions = ({
 						setIsDescriptionExpanded={setIsDescriptionExpanded}
 					/>
 
-					<ThinkingBudget
-						key={`${selectedProvider}-${selectedModelId}`}
+					<ThinkingBudgetHelper
+						provider={selectedProvider}
+						modelId={selectedModelId}
+						modelInfo={selectedModelInfo}
 						apiConfiguration={apiConfiguration}
 						setApiConfigurationField={setApiConfigurationField}
-						modelInfo={selectedModelInfo}
 					/>
 				</>
 			)}
