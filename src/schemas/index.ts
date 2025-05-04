@@ -433,6 +433,8 @@ export const providerSettingsSchema = z.object({
 	claudeCodePath: z.string().optional(),
 	claudeCodeModelId: z.string().optional(),
 	claudeCodeVsCodeIntegration: z.boolean().optional(),
+	commandTimeout: z.number().optional(),
+	authCheckTimeout: z.number().optional(),
 	// Claude 3.7 Sonnet Thinking
 	modelMaxTokens: z.number().optional(),
 	modelMaxThinkingTokens: z.number().optional(),
@@ -528,6 +530,8 @@ const providerSettingsRecord: ProviderSettingsRecord = {
 	claudeCodePath: undefined,
 	claudeCodeModelId: undefined,
 	claudeCodeVsCodeIntegration: undefined,
+	commandTimeout: undefined,
+	authCheckTimeout: undefined,
 	// Claude 3.7 Sonnet Thinking
 	modelMaxTokens: undefined,
 	modelMaxThinkingTokens: undefined,

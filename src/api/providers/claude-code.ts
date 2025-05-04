@@ -51,7 +51,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * the result to determine if the user is authenticated. It handles command execution,
 	 * output parsing, and error handling.
 	 *
-	 * @param claudeCodePath - Path to the Claude Code CLI executable (defaults to "claude-code")
+	 * @param claudeCodePath - Path to the Claude Code CLI executable (defaults to "claude")
 	 * @returns Promise resolving to true if authenticated, false otherwise
 	 *
 	 * @example
@@ -60,14 +60,14 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * const isAuthenticated = await ClaudeCodeHandler.checkAuthentication();
 	 *
 	 * // Check authentication with custom CLI path
-	 * const isAuthenticated = await ClaudeCodeHandler.checkAuthentication("/usr/local/bin/claude-code");
+	 * const isAuthenticated = await ClaudeCodeHandler.checkAuthentication("/usr/local/bin/claude");
 	 *
 	 * if (!isAuthenticated) {
-	 *   console.log("Please run 'claude-code login' to authenticate");
+	 *   console.log("Please run 'claude login' to authenticate");
 	 * }
 	 * ```
 	 */
-	public static async checkAuthentication(claudeCodePath: string = "claude-code"): Promise<boolean> {
+	public static async checkAuthentication(claudeCodePath: string = "claude"): Promise<boolean> {
 		try {
 			// Run the auth status command
 			const childProcess = spawn(claudeCodePath, ["auth", "status", "--json"], {
@@ -143,7 +143,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	/**
 	 * Validate and normalize a path to the Claude Code CLI
 	 * @param path Path to validate
-	 * @returns Normalized path or "claude-code" if using default
+	 * @returns Normalized path or "claude" if using default
 	 */
 	private validateCliPath(path?: string): string {
 		// Import the validateCliPath function from path-utils at run time to avoid circular dependencies
@@ -155,7 +155,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			// Fall back to built-in validation if path-utils is not available
 
 			if (!path) {
-				return "claude-code" // Default executable name
+				return "claude" // Default executable name
 			}
 
 			// Trim whitespace
@@ -163,7 +163,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 			// If empty after trimming, use default
 			if (!trimmedPath) {
-				return "claude-code"
+				return "claude"
 			}
 
 			// Enhanced security validation for CLI path
@@ -187,7 +187,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			for (const pattern of dangerousPatterns) {
 				if (pattern.test(trimmedPath)) {
 					console.warn(`Potentially unsafe characters in CLI path: "${trimmedPath}". Using default instead.`)
-					return "claude-code"
+					return "claude"
 				}
 			}
 
@@ -196,13 +196,13 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			const safePathPattern = /^[a-zA-Z0-9_\-\/\.]+$/
 			if (!safePathPattern.test(trimmedPath)) {
 				console.warn(`CLI path contains invalid characters: "${trimmedPath}". Using default instead.`)
-				return "claude-code"
+				return "claude"
 			}
 
 			// 3. Maximum reasonable path length - prevent buffer overflow attacks
 			if (trimmedPath.length > 1024) {
 				console.warn(`CLI path too long (${trimmedPath.length} chars). Using default instead.`)
-				return "claude-code"
+				return "claude"
 			}
 
 			// 4. Handle Windows .exe extension if needed
@@ -293,7 +293,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 				this.authError = this.isAuthenticated
 					? null
-					: "Not authenticated with Claude Code CLI. Please run 'claude-code login' in your terminal"
+					: "Not authenticated with Claude Code CLI. Please run 'claude login' in your terminal"
 				this.authChecked = true
 			} catch (error) {
 				console.error("Failed to check Claude Code authentication after retries:", error)
@@ -511,7 +511,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 				const errorMessage = authError || "Not authenticated with Claude Code CLI"
 				yield {
 					type: "text",
-					text: `${errorMessage}\n\nTo use Claude Code CLI as a provider:\n1. Install Claude Code CLI from https://claude.ai/code\n2. Run 'claude-code login' in your terminal\n3. Verify it works by running 'claude-code chat' in your terminal`,
+					text: `${errorMessage}\n\nTo use Claude Code CLI as a provider:\n1. Install Claude Code CLI from https://claude.ai/code\n2. Run 'claude login' in your terminal\n3. Verify it works by running 'claude chat' in your terminal`,
 				}
 				return
 			}
@@ -692,7 +692,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			// Check if authenticated
 			if (!isAuthenticated) {
 				const errorMessage = authError || "Not authenticated with Claude Code CLI"
-				throw new Error(`${errorMessage}. Please run 'claude-code login' in your terminal.`)
+				throw new Error(`${errorMessage}. Please run 'claude login' in your terminal.`)
 			}
 
 			const modelId = this.getModel().id
@@ -882,7 +882,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
  * If the CLI is not installed or the user is not authenticated, it falls back to the
  * centralized model definitions.
  *
- * @param claudeCodePath - Path to the Claude Code CLI executable (defaults to "claude-code")
+ * @param claudeCodePath - Path to the Claude Code CLI executable (defaults to "claude")
  * @returns Promise resolving to an array of model IDs supported by Claude Code
  *
  * @example
@@ -891,7 +891,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
  * const models = await getClaudeCodeModels();
  *
  * // Get models with custom CLI path
- * const models = await getClaudeCodeModels("/usr/local/bin/claude-code");
+ * const models = await getClaudeCodeModels("/usr/local/bin/claude");
  *
  * // Use models to populate a dropdown
  * const dropdown = document.getElementById("model-select");
@@ -903,7 +903,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
  * });
  * ```
  */
-export async function getClaudeCodeModels(claudeCodePath = "claude-code"): Promise<string[]> {
+export async function getClaudeCodeModels(claudeCodePath = "claude"): Promise<string[]> {
 	try {
 		// Get the default models from the centralized definitions
 		const defaultModels = Object.keys(CLAUDE_MODELS)

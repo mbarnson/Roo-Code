@@ -125,6 +125,8 @@ type ProviderSettings = {
 	claudeCodePath?: string | undefined
 	claudeCodeModelId?: string | undefined
 	claudeCodeVsCodeIntegration?: boolean | undefined
+	commandTimeout?: number | undefined
+	authCheckTimeout?: number | undefined
 	modelMaxTokens?: number | undefined
 	modelMaxThinkingTokens?: number | undefined
 	includeMaxTokens?: boolean | undefined

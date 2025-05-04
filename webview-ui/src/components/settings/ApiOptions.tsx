@@ -1,4 +1,13 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react"
+
+// Helper function to handle string defaultValues for i18n
+function tWithDefault(
+	t: (key: string, options?: Record<string, any>) => string,
+	key: string,
+	defaultValue: string,
+): string {
+	return t(key, { defaultValue })
+}
 import { useDebounce, useEvent } from "react-use"
 import { Trans } from "react-i18next"
 import { LanguageModelChatSelector } from "vscode"
@@ -52,6 +61,7 @@ import {
 import { ModelInfoView } from "./ModelInfoView"
 import { ModelPicker } from "./ModelPicker"
 import { ApiErrorMessage } from "./ApiErrorMessage"
+import { ThinkingBudget } from "./ThinkingBudget"
 import { R1FormatSetting } from "./R1FormatSetting"
 import { OpenRouterBalanceDisplay } from "./OpenRouterBalanceDisplay"
 import { TroubleshootingBlock } from "./TroubleshootingBlock"
@@ -241,7 +251,6 @@ const ApiOptions = ({
 			apiConfiguration?.ollamaBaseUrl,
 			apiConfiguration?.lmStudioBaseUrl,
 			customHeaders,
-			apiConfiguration?.openAiHeaders,
 		],
 	)
 
@@ -1657,8 +1666,8 @@ const ApiOptions = ({
 			{selectedProvider === "claude-code" && (
 				<>
 					<VSCodeTextField
-						value={apiConfiguration?.claudeCodePath || ""}
-						onInput={handleInputChange("claudeCodePath")}
+						value={(apiConfiguration as any)?.claudeCodePath || ""}
+						onInput={handleInputChange("claudeCodePath" as any)}
 						placeholder="claude-code"
 						className="w-full">
 						<label className="block font-medium mb-1">{t("settings:providers.claudeCode.cliPath")}</label>
@@ -1706,17 +1715,20 @@ const ApiOptions = ({
 					/>
 
 					<TroubleshootingBlock
-						title={t(
+						title={tWithDefault(
+							t,
 							"settings:providers.claudeCode.troubleshooting.title",
 							"Troubleshooting Common Issues",
 						)}
-						description={t(
+						description={tWithDefault(
+							t,
 							"settings:providers.claudeCode.troubleshooting.description",
 							"Expand any section below for help with common Claude Code issues.",
 						)}
 						items={[
 							{
-								title: t(
+								title: tWithDefault(
+									t,
 									"settings:providers.claudeCode.troubleshooting.auth.title",
 									"Authentication Issues",
 								),
@@ -1724,13 +1736,15 @@ const ApiOptions = ({
 									<ul className="list-disc ml-4 space-y-2">
 										<li>
 											<strong>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.auth.notAuthenticated",
 													"Not authenticated",
 												)}
 											</strong>
 											<p>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.auth.notAuthenticatedSolution",
 													"Open a terminal and run 'claude-code login', then follow browser prompts to authenticate.",
 												)}
@@ -1738,13 +1752,15 @@ const ApiOptions = ({
 										</li>
 										<li>
 											<strong>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.auth.timeout",
 													"Authentication check timeout",
 												)}
 											</strong>
 											<p>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.auth.timeoutSolution",
 													"Check your internet connection and try again. You can increase the timeout in settings.",
 												)}
@@ -1754,7 +1770,8 @@ const ApiOptions = ({
 								),
 							},
 							{
-								title: t(
+								title: tWithDefault(
+									t,
 									"settings:providers.claudeCode.troubleshooting.install.title",
 									"Installation Issues",
 								),
@@ -1762,18 +1779,21 @@ const ApiOptions = ({
 									<ul className="list-disc ml-4 space-y-2">
 										<li>
 											<strong>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.install.notFound",
 													"CLI not found",
 												)}
 											</strong>
 											<p>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.install.notFoundSolution",
 													"Visit",
 												)}{" "}
 												<VSCodeLink href="https://claude.ai/code">claude.ai/code</VSCodeLink>{" "}
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.install.notFoundSolutionCont",
 													"to download and install the CLI. Make sure it's in your PATH or specify the full path above.",
 												)}
@@ -1781,13 +1801,15 @@ const ApiOptions = ({
 										</li>
 										<li>
 											<strong>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.install.permission",
 													"Permission denied",
 												)}
 											</strong>
 											<p>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.install.permissionSolution",
 													"Run 'chmod +x /path/to/claude-code' to make it executable.",
 												)}
@@ -1797,7 +1819,8 @@ const ApiOptions = ({
 								),
 							},
 							{
-								title: t(
+								title: tWithDefault(
+									t,
 									"settings:providers.claudeCode.troubleshooting.command.title",
 									"Command Execution Issues",
 								),
@@ -1805,13 +1828,15 @@ const ApiOptions = ({
 									<ul className="list-disc ml-4 space-y-2">
 										<li>
 											<strong>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.command.timeout",
 													"Command timeout",
 												)}
 											</strong>
 											<p>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.command.timeoutSolution",
 													"Increase the commandTimeout setting for complex requests or slow networks.",
 												)}
@@ -1819,13 +1844,15 @@ const ApiOptions = ({
 										</li>
 										<li>
 											<strong>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.command.startFailed",
 													"Failed to start CLI",
 												)}
 											</strong>
 											<p>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.command.startFailedSolution",
 													"Check if the CLI is correctly installed by running 'claude-code --version' in a terminal.",
 												)}
@@ -1835,7 +1862,8 @@ const ApiOptions = ({
 								),
 							},
 							{
-								title: t(
+								title: tWithDefault(
+									t,
 									"settings:providers.claudeCode.troubleshooting.network.title",
 									"Network Issues",
 								),
@@ -1843,13 +1871,15 @@ const ApiOptions = ({
 									<ul className="list-disc ml-4 space-y-2">
 										<li>
 											<strong>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.network.connection",
 													"Connection errors",
 												)}
 											</strong>
 											<p>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.network.connectionSolution",
 													"Check your internet connection. If you're using a proxy or VPN, try temporarily disabling it.",
 												)}
@@ -1859,27 +1889,31 @@ const ApiOptions = ({
 								),
 							},
 							{
-								title: t(
+								title: tWithDefault(
+									t,
 									"settings:providers.claudeCode.troubleshooting.platform.title",
 									"Platform-Specific Issues",
 								),
 								content: (
 									<>
 										<h4 className="font-semibold mb-1">
-											{t(
+											{tWithDefault(
+												t,
 												"settings:providers.claudeCode.troubleshooting.platform.windows",
 												"Windows",
 											)}
 										</h4>
 										<ul className="list-disc ml-4 mb-2">
 											<li>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.platform.windowsPaths",
 													"Use forward slashes (/) in paths, or double backslashes (\\\\).",
 												)}
 											</li>
 											<li>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.platform.windowsCmd",
 													"Try running from Command Prompt instead of PowerShell if having issues.",
 												)}
@@ -1887,17 +1921,23 @@ const ApiOptions = ({
 										</ul>
 
 										<h4 className="font-semibold mb-1">
-											{t("settings:providers.claudeCode.troubleshooting.platform.mac", "macOS")}
+											{tWithDefault(
+												t,
+												"settings:providers.claudeCode.troubleshooting.platform.mac",
+												"macOS",
+											)}
 										</h4>
 										<ul className="list-disc ml-4 mb-2">
 											<li>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.platform.macPath",
 													"Make sure /usr/local/bin is in your PATH.",
 												)}
 											</li>
 											<li>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.platform.macHomebrew",
 													"If installed via homebrew, run 'brew link claude-code'.",
 												)}
@@ -1905,11 +1945,16 @@ const ApiOptions = ({
 										</ul>
 
 										<h4 className="font-semibold mb-1">
-											{t("settings:providers.claudeCode.troubleshooting.platform.linux", "Linux")}
+											{tWithDefault(
+												t,
+												"settings:providers.claudeCode.troubleshooting.platform.linux",
+												"Linux",
+											)}
 										</h4>
 										<ul className="list-disc ml-4">
 											<li>
-												{t(
+												{tWithDefault(
+													t,
 													"settings:providers.claudeCode.troubleshooting.platform.linuxLibs",
 													"You may need to install dependencies, e.g., 'libssl-dev' on Debian/Ubuntu.",
 												)}
@@ -1923,33 +1968,41 @@ const ApiOptions = ({
 
 					<div className="mt-4">
 						<h3 className="font-semibold mb-2">
-							{t("settings:providers.claudeCode.advancedSettings", "Advanced Settings")}
+							{tWithDefault(t, "settings:providers.claudeCode.advancedSettings", "Advanced Settings")}
 						</h3>
 
 						<div className="flex flex-row gap-4 my-3">
 							<VSCodeTextField
-								value={apiConfiguration?.commandTimeout?.toString() || "60000"}
-								onInput={handleInputChange("commandTimeout", Number)}
+								value={(apiConfiguration as any)?.commandTimeout?.toString() || "60000"}
+								onInput={handleInputChange("commandTimeout" as any, Number)}
 								className="w-1/2">
 								<label className="block font-medium mb-1 text-sm">
-									{t("settings:providers.claudeCode.commandTimeout", "Command Timeout (ms)")}
+									{tWithDefault(
+										t,
+										"settings:providers.claudeCode.commandTimeout",
+										"Command Timeout (ms)",
+									)}
 								</label>
 							</VSCodeTextField>
 
 							<VSCodeTextField
-								value={apiConfiguration?.authCheckTimeout?.toString() || "5000"}
-								onInput={handleInputChange("authCheckTimeout", Number)}
+								value={(apiConfiguration as any)?.authCheckTimeout?.toString() || "5000"}
+								onInput={handleInputChange("authCheckTimeout" as any, Number)}
 								className="w-1/2">
 								<label className="block font-medium mb-1 text-sm">
-									{t("settings:providers.claudeCode.authCheckTimeout", "Auth Timeout (ms)")}
+									{tWithDefault(
+										t,
+										"settings:providers.claudeCode.authCheckTimeout",
+										"Auth Timeout (ms)",
+									)}
 								</label>
 							</VSCodeTextField>
 						</div>
 
 						<div className="flex flex-col gap-2 mt-2">
 							<Checkbox
-								checked={apiConfiguration?.claudeCodeVsCodeIntegration !== false}
-								onChange={handleInputChange("claudeCodeVsCodeIntegration", noTransform)}>
+								checked={(apiConfiguration as any)?.claudeCodeVsCodeIntegration !== false}
+								onChange={handleInputChange("claudeCodeVsCodeIntegration" as any, noTransform)}>
 								<div className="flex items-center gap-1">
 									<span className="font-medium">
 										{t("settings:providers.claudeCode.vsCodeIntegration")}
@@ -1969,18 +2022,20 @@ const ApiOptions = ({
 
 					<ModelSelectionBlock
 						apiProvider={selectedProvider}
-						modelId={apiConfiguration?.claudeCodeModelId || ""}
+						modelId={(apiConfiguration as any)?.claudeCodeModelId || ""}
 						defaultModelId="claude-3-sonnet-20240229"
 						models={claudeCodeModels}
-						onModelChange={(value) => setApiConfigurationField("claudeCodeModelId", value)}
+						onModelChange={(value) => setApiConfigurationField("claudeCodeModelId" as any, value)}
 						isDescriptionExpanded={isDescriptionExpanded}
 						setIsDescriptionExpanded={setIsDescriptionExpanded}
 					/>
 
 					<ThinkingBudgetHelper
 						provider={selectedProvider}
-						modelId={apiConfiguration?.claudeCodeModelId || ""}
-						modelInfo={claudeCodeModels[apiConfiguration?.claudeCodeModelId || "claude-3-sonnet-20240229"]}
+						modelId={(apiConfiguration as any)?.claudeCodeModelId || ""}
+						modelInfo={
+							claudeCodeModels[(apiConfiguration as any)?.claudeCodeModelId || "claude-3-sonnet-20240229"]
+						}
 						apiConfiguration={apiConfiguration}
 						setApiConfigurationField={setApiConfigurationField}
 					/>
@@ -2169,12 +2224,11 @@ const ApiOptions = ({
 						setIsDescriptionExpanded={setIsDescriptionExpanded}
 					/>
 
-					<ThinkingBudgetHelper
-						provider={selectedProvider}
-						modelId={selectedModelId}
-						modelInfo={selectedModelInfo}
+					<ThinkingBudget
+						key={`${selectedProvider}-${selectedModelId}`}
 						apiConfiguration={apiConfiguration}
 						setApiConfigurationField={setApiConfigurationField}
+						modelInfo={selectedModelInfo}
 					/>
 				</>
 			)}

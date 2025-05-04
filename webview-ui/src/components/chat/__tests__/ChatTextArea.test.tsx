@@ -73,7 +73,7 @@ describe("ChatTextArea", () => {
 
 	describe("enhance prompt button", () => {
 		it("should be disabled when textAreaDisabled is true", () => {
-			;(useExtensionState as jest.Mock).mockReturnValue({
+			(useExtensionState as jest.Mock).mockReturnValue({
 				filePaths: [],
 				openedTabs: [],
 			})
@@ -108,7 +108,7 @@ describe("ChatTextArea", () => {
 		})
 
 		it("should not send message when input is empty", () => {
-			;(useExtensionState as jest.Mock).mockReturnValue({
+			(useExtensionState as jest.Mock).mockReturnValue({
 				filePaths: [],
 				openedTabs: [],
 				apiConfiguration: {
@@ -125,7 +125,7 @@ describe("ChatTextArea", () => {
 		})
 
 		it("should show loading state while enhancing", () => {
-			;(useExtensionState as jest.Mock).mockReturnValue({
+			(useExtensionState as jest.Mock).mockReturnValue({
 				filePaths: [],
 				openedTabs: [],
 				apiConfiguration: {
