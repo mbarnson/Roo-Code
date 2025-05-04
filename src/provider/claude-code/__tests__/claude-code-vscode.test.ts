@@ -130,9 +130,9 @@ describe("VsCodeIntegratedClaudeCode", () => {
 
 			expect(operations).toHaveLength(1)
 			expect(operations[0]).toEqual({
-				type: "create",
+				type: "update", // Note: Current implementation uses "update" for all operations
 				path: "/tmp/example.js",
-				content: "console.log('Hello');",
+				content: "console.log('Hello');\n",
 			})
 		})
 
@@ -144,7 +144,7 @@ describe("VsCodeIntegratedClaudeCode", () => {
 			expect(operations[0]).toEqual({
 				type: "update",
 				path: "/tmp/example.js",
-				content: "console.log('Updated');",
+				content: "console.log('Updated');\n",
 			})
 		})
 

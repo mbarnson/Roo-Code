@@ -41,13 +41,20 @@ import { getRequestyAuthUrl, getOpenRouterAuthUrl, getGlamaAuthUrl } from "@src/
 
 import { VSCodeButtonLink } from "../common/VSCodeButtonLink"
 
-import { MODELS_BY_PROVIDER, PROVIDERS, VERTEX_REGIONS, REASONING_MODELS, AWS_REGIONS, claudeCodeModels } from "./constants"
+import {
+	MODELS_BY_PROVIDER,
+	PROVIDERS,
+	VERTEX_REGIONS,
+	REASONING_MODELS,
+	AWS_REGIONS,
+	claudeCodeModels,
+} from "./constants"
 import { ModelInfoView } from "./ModelInfoView"
 import { ModelPicker } from "./ModelPicker"
 import { ApiErrorMessage } from "./ApiErrorMessage"
-import { ThinkingBudget } from "./ThinkingBudget"
 import { R1FormatSetting } from "./R1FormatSetting"
 import { OpenRouterBalanceDisplay } from "./OpenRouterBalanceDisplay"
+import { TroubleshootingBlock } from "./TroubleshootingBlock"
 import { RequestyBalanceDisplay } from "./RequestyBalanceDisplay"
 import { ReasoningEffort } from "./ReasoningEffort"
 import { PromptCachingControl } from "./PromptCachingControl"
@@ -57,7 +64,6 @@ import { RateLimitSecondsControl } from "./RateLimitSecondsControl"
 import { AuthenticationBlock } from "./AuthenticationBlock"
 import { ModelSelectionBlock } from "./ModelSelectionBlock"
 import { ThinkingBudgetHelper } from "./ThinkingBudgetHelper"
-import { ProviderOptionsBlock } from "./ProviderOptionsBlock"
 
 export interface ApiOptionsProps {
 	uriScheme: string | undefined
@@ -92,8 +98,9 @@ const ApiOptions = ({
 	// Effect to synchronize internal customHeaders state with prop changes
 	useEffect(() => {
 		const propHeaders = apiConfiguration?.openAiHeaders || {}
-		if (JSON.stringify(customHeaders) !== JSON.stringify(Object.entries(propHeaders))) setCustomHeaders(Object.entries(propHeaders))
-	}, [apiConfiguration?.openAiHeaders])
+		if (JSON.stringify(customHeaders) !== JSON.stringify(Object.entries(propHeaders)))
+			setCustomHeaders(Object.entries(propHeaders))
+	}, [apiConfiguration?.openAiHeaders, customHeaders])
 
 	const [anthropicBaseUrlSelected, setAnthropicBaseUrlSelected] = useState(!!apiConfiguration?.anthropicBaseUrl)
 	const [openAiNativeBaseUrlSelected, setOpenAiNativeBaseUrlSelected] = useState(
@@ -234,6 +241,7 @@ const ApiOptions = ({
 			apiConfiguration?.ollamaBaseUrl,
 			apiConfiguration?.lmStudioBaseUrl,
 			customHeaders,
+			apiConfiguration?.openAiHeaders,
 		],
 	)
 
@@ -463,8 +471,7 @@ const ApiOptions = ({
 								<Trans
 									i18nKey="settings:providers.openRouterTransformsText"
 									components={{
-										// eslint-disable-next-line jsx-a11y/anchor-has-content
-										a: <a href="https://openrouter.ai/docs/transforms" />,
+										a: <a href="https://openrouter.ai/docs/transforms">Link</a>,
 									}}
 								/>
 							</Checkbox>
@@ -1659,7 +1666,7 @@ const ApiOptions = ({
 					<div className="text-sm text-vscode-descriptionForeground -mt-2">
 						{t("settings:providers.claudeCode.cliPathDescription")}
 					</div>
-					
+
 					<AuthenticationBlock
 						title={`🔑 ${t("settings:providers.claudeCode.authRequired")}`}
 						instructions={t("settings:providers.claudeCode.authInstructions")}
@@ -1672,51 +1679,293 @@ const ApiOptions = ({
 											claude.ai/code
 										</VSCodeLink>
 									</>
-								)
+								),
 							},
 							{
 								content: (
 									<Trans
 										i18nKey="settings:providers.claudeCode.loginCommand"
 										components={{
-											code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white"/>
+											code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white" />,
 										}}
 									/>
-								)
+								),
 							},
 							{
 								content: (
 									<Trans
 										i18nKey="settings:providers.claudeCode.verifyCommand"
 										components={{
-											code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white"/>
+											code: <code className="px-1 py-0.5 rounded bg-opacity-30 bg-white" />,
 										}}
 									/>
-								)
-							}
+								),
+							},
 						]}
 						note={t("settings:providers.claudeCode.authNote")}
 					/>
-			        
-			        <div className="mt-4">
-			            <div className="flex flex-col gap-2">
-			                <Checkbox
-			                    checked={apiConfiguration?.claudeCodeVsCodeIntegration !== false}
-			                    onChange={handleInputChange("claudeCodeVsCodeIntegration", noTransform)}>
-			                    <div className="flex items-center gap-1">
-			                        <span className="font-medium">{t("settings:providers.claudeCode.vsCodeIntegration")}</span>
-			                        <i
-			                            className="codicon codicon-info text-vscode-descriptionForeground"
-			                            title={t("settings:providers.claudeCode.vsCodeIntegrationTooltip")}
-			                            style={{ fontSize: "12px" }}
-			                        />
-			                    </div>
-			                </Checkbox>
-			            </div>
-			            <div className="text-sm text-vscode-descriptionForeground mt-2">
-			                {t("settings:providers.claudeCode.vsCodeIntegrationDescription")}
-			            </div>
-			        </div>
+
+					<TroubleshootingBlock
+						title={t(
+							"settings:providers.claudeCode.troubleshooting.title",
+							"Troubleshooting Common Issues",
+						)}
+						description={t(
+							"settings:providers.claudeCode.troubleshooting.description",
+							"Expand any section below for help with common Claude Code issues.",
+						)}
+						items={[
+							{
+								title: t(
+									"settings:providers.claudeCode.troubleshooting.auth.title",
+									"Authentication Issues",
+								),
+								content: (
+									<ul className="list-disc ml-4 space-y-2">
+										<li>
+											<strong>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.auth.notAuthenticated",
+													"Not authenticated",
+												)}
+											</strong>
+											<p>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.auth.notAuthenticatedSolution",
+													"Open a terminal and run 'claude-code login', then follow browser prompts to authenticate.",
+												)}
+											</p>
+										</li>
+										<li>
+											<strong>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.auth.timeout",
+													"Authentication check timeout",
+												)}
+											</strong>
+											<p>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.auth.timeoutSolution",
+													"Check your internet connection and try again. You can increase the timeout in settings.",
+												)}
+											</p>
+										</li>
+									</ul>
+								),
+							},
+							{
+								title: t(
+									"settings:providers.claudeCode.troubleshooting.install.title",
+									"Installation Issues",
+								),
+								content: (
+									<ul className="list-disc ml-4 space-y-2">
+										<li>
+											<strong>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.install.notFound",
+													"CLI not found",
+												)}
+											</strong>
+											<p>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.install.notFoundSolution",
+													"Visit",
+												)}{" "}
+												<VSCodeLink href="https://claude.ai/code">claude.ai/code</VSCodeLink>{" "}
+												{t(
+													"settings:providers.claudeCode.troubleshooting.install.notFoundSolutionCont",
+													"to download and install the CLI. Make sure it's in your PATH or specify the full path above.",
+												)}
+											</p>
+										</li>
+										<li>
+											<strong>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.install.permission",
+													"Permission denied",
+												)}
+											</strong>
+											<p>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.install.permissionSolution",
+													"Run 'chmod +x /path/to/claude-code' to make it executable.",
+												)}
+											</p>
+										</li>
+									</ul>
+								),
+							},
+							{
+								title: t(
+									"settings:providers.claudeCode.troubleshooting.command.title",
+									"Command Execution Issues",
+								),
+								content: (
+									<ul className="list-disc ml-4 space-y-2">
+										<li>
+											<strong>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.command.timeout",
+													"Command timeout",
+												)}
+											</strong>
+											<p>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.command.timeoutSolution",
+													"Increase the commandTimeout setting for complex requests or slow networks.",
+												)}
+											</p>
+										</li>
+										<li>
+											<strong>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.command.startFailed",
+													"Failed to start CLI",
+												)}
+											</strong>
+											<p>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.command.startFailedSolution",
+													"Check if the CLI is correctly installed by running 'claude-code --version' in a terminal.",
+												)}
+											</p>
+										</li>
+									</ul>
+								),
+							},
+							{
+								title: t(
+									"settings:providers.claudeCode.troubleshooting.network.title",
+									"Network Issues",
+								),
+								content: (
+									<ul className="list-disc ml-4 space-y-2">
+										<li>
+											<strong>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.network.connection",
+													"Connection errors",
+												)}
+											</strong>
+											<p>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.network.connectionSolution",
+													"Check your internet connection. If you're using a proxy or VPN, try temporarily disabling it.",
+												)}
+											</p>
+										</li>
+									</ul>
+								),
+							},
+							{
+								title: t(
+									"settings:providers.claudeCode.troubleshooting.platform.title",
+									"Platform-Specific Issues",
+								),
+								content: (
+									<>
+										<h4 className="font-semibold mb-1">
+											{t(
+												"settings:providers.claudeCode.troubleshooting.platform.windows",
+												"Windows",
+											)}
+										</h4>
+										<ul className="list-disc ml-4 mb-2">
+											<li>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.platform.windowsPaths",
+													"Use forward slashes (/) in paths, or double backslashes (\\\\).",
+												)}
+											</li>
+											<li>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.platform.windowsCmd",
+													"Try running from Command Prompt instead of PowerShell if having issues.",
+												)}
+											</li>
+										</ul>
+
+										<h4 className="font-semibold mb-1">
+											{t("settings:providers.claudeCode.troubleshooting.platform.mac", "macOS")}
+										</h4>
+										<ul className="list-disc ml-4 mb-2">
+											<li>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.platform.macPath",
+													"Make sure /usr/local/bin is in your PATH.",
+												)}
+											</li>
+											<li>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.platform.macHomebrew",
+													"If installed via homebrew, run 'brew link claude-code'.",
+												)}
+											</li>
+										</ul>
+
+										<h4 className="font-semibold mb-1">
+											{t("settings:providers.claudeCode.troubleshooting.platform.linux", "Linux")}
+										</h4>
+										<ul className="list-disc ml-4">
+											<li>
+												{t(
+													"settings:providers.claudeCode.troubleshooting.platform.linuxLibs",
+													"You may need to install dependencies, e.g., 'libssl-dev' on Debian/Ubuntu.",
+												)}
+											</li>
+										</ul>
+									</>
+								),
+							},
+						]}
+					/>
+
+					<div className="mt-4">
+						<h3 className="font-semibold mb-2">
+							{t("settings:providers.claudeCode.advancedSettings", "Advanced Settings")}
+						</h3>
+
+						<div className="flex flex-row gap-4 my-3">
+							<VSCodeTextField
+								value={apiConfiguration?.commandTimeout?.toString() || "60000"}
+								onInput={handleInputChange("commandTimeout", Number)}
+								className="w-1/2">
+								<label className="block font-medium mb-1 text-sm">
+									{t("settings:providers.claudeCode.commandTimeout", "Command Timeout (ms)")}
+								</label>
+							</VSCodeTextField>
+
+							<VSCodeTextField
+								value={apiConfiguration?.authCheckTimeout?.toString() || "5000"}
+								onInput={handleInputChange("authCheckTimeout", Number)}
+								className="w-1/2">
+								<label className="block font-medium mb-1 text-sm">
+									{t("settings:providers.claudeCode.authCheckTimeout", "Auth Timeout (ms)")}
+								</label>
+							</VSCodeTextField>
+						</div>
+
+						<div className="flex flex-col gap-2 mt-2">
+							<Checkbox
+								checked={apiConfiguration?.claudeCodeVsCodeIntegration !== false}
+								onChange={handleInputChange("claudeCodeVsCodeIntegration", noTransform)}>
+								<div className="flex items-center gap-1">
+									<span className="font-medium">
+										{t("settings:providers.claudeCode.vsCodeIntegration")}
+									</span>
+									<i
+										className="codicon codicon-info text-vscode-descriptionForeground"
+										title={t("settings:providers.claudeCode.vsCodeIntegrationTooltip")}
+										style={{ fontSize: "12px" }}
+									/>
+								</div>
+							</Checkbox>
+						</div>
+						<div className="text-sm text-vscode-descriptionForeground mt-2">
+							{t("settings:providers.claudeCode.vsCodeIntegrationDescription")}
+						</div>
+					</div>
 
 					<ModelSelectionBlock
 						apiProvider={selectedProvider}
@@ -1727,7 +1976,7 @@ const ApiOptions = ({
 						isDescriptionExpanded={isDescriptionExpanded}
 						setIsDescriptionExpanded={setIsDescriptionExpanded}
 					/>
-					
+
 					<ThinkingBudgetHelper
 						provider={selectedProvider}
 						modelId={apiConfiguration?.claudeCodeModelId || ""}

@@ -338,13 +338,15 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * Execute a Claude Code CLI command and return the result as a stream
 	 * @param command - Command arguments to pass to the Claude Code CLI
 	 * @param input - Optional input to send to the process stdin
-	 * @param timeout - Optional timeout in milliseconds (defaults to 60 seconds)
+	 * @param timeout - Optional timeout in milliseconds (overrides settings.commandTimeout, defaults to 60 seconds)
 	 */
 	private async executeClaudeCodeCommand(
 		command: string[],
 		input?: string,
-		timeout = 60000,
+		timeout?: number,
 	): Promise<AsyncIterable<string>> {
+		// Use provided timeout, option from settings, or default to 60000ms
+		const commandTimeout = timeout || this.options.commandTimeout || 60000
 		// Import concurrency utilities dynamically to avoid circular dependencies
 		const { executeWithConcurrencyControl } = require("../../provider/claude-code/concurrency-utils")
 
@@ -366,8 +368,8 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			const processPromise = new Promise<void>((resolve, reject) => {
 				const timer = setTimeout(() => {
 					childProcess.kill()
-					reject(new Error(`Claude Code CLI command timed out after ${timeout}ms`))
-				}, timeout)
+					reject(new Error(`Claude Code CLI command timed out after ${commandTimeout}ms`))
+				}, commandTimeout)
 
 				// Handle errors
 				childProcess.on("error", (err) => {
@@ -434,6 +436,8 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * Wait for authentication check to complete
 	 * @param _canYield - Whether to yield status messages (for streaming APIs)
 	 * @returns A tuple with [isAuthenticated, errorMessage]
+	 * @remarks
+	 * Uses options.authCheckTimeout (default: 5000ms) as timeout for authentication check
 	 */
 	private async waitForAuthentication(_canYield = false): Promise<[boolean, string | null]> {
 		// Wait for authentication check to complete if not done yet
@@ -449,14 +453,14 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 					}
 				}, 100)
 
-				// Set a timeout to avoid waiting forever
+				// Set a timeout to avoid waiting forever - use configured timeout or default
 				setTimeout(() => {
 					clearInterval(checkInterval)
 					this.authError = "Authentication check timed out"
 					this.authChecked = true
 					this.isAuthenticated = false
 					resolve()
-				}, 5000)
+				}, this.options.authCheckTimeout || 5000)
 			})
 		}
 

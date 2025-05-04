@@ -48,6 +48,12 @@ export interface ClaudeCodeCommandOptions {
 
 	/** Reasoning effort setting */
 	reasoningEffort?: "low" | "medium" | "high"
+
+	/** Command execution timeout in milliseconds (default: 60000ms) */
+	commandTimeout?: number
+
+	/** Authentication check timeout in milliseconds (default: 5000ms) */
+	authCheckTimeout?: number
 }
 
 /**

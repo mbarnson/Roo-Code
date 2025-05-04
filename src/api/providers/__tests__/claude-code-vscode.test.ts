@@ -29,6 +29,10 @@ describe("VsCodeIntegratedClaudeCode", () => {
 			"test-task-id",
 		) as jest.Mocked<FileContextTracker>
 
+		// Setup FileContextTracker mock methods
+		mockFileContextTracker.markFileAsEditedByRoo = jest.fn()
+		mockFileContextTracker.trackFileContext = jest.fn()
+
 		// Mock workspace folders
 		;(vscode.workspace.workspaceFolders as unknown) = [
 			{

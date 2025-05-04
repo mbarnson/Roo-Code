@@ -14,6 +14,11 @@ const vscode = {
 		createTextEditorDecorationType: jest.fn().mockReturnValue({
 			dispose: jest.fn(),
 		}),
+		withProgress: jest.fn().mockImplementation((options, task) => {
+			const progress = { report: jest.fn() }
+			const token = { isCancellationRequested: false, onCancellationRequested: jest.fn() }
+			return Promise.resolve(task(progress, token))
+		}),
 		tabGroups: {
 			onDidChangeTabs: jest.fn(() => {
 				return {
@@ -32,6 +37,9 @@ const vscode = {
 		}),
 		fs: {
 			stat: jest.fn(),
+			readFile: jest.fn().mockResolvedValue(Buffer.from("")),
+			writeFile: jest.fn().mockResolvedValue(undefined),
+			delete: jest.fn().mockResolvedValue(undefined),
 		},
 	},
 	Disposable: class {

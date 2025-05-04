@@ -239,16 +239,17 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler implements Api
 	// Using the shared formatErrorMessage utility function from error-formatter.ts
 
 	/**
-	 * Show progress indicator in the VS Code UI
+	 * Show progress indicator in the VS Code UI with detailed status updates
 	 *
-	 * This method displays a notification-based progress indicator in VS Code
-	 * to provide visual feedback while operations are in progress. The progress
-	 * indicator remains visible until hideProgress is called.
+	 * This enhanced method displays a notification-based progress indicator in VS Code
+	 * with more detailed status reporting. It now shows incremental progress updates
+	 * and supports reporting current operation details.
 	 *
-	 * The method also sets up the promise resolution mechanism that allows the
-	 * progress indicator to be dismissed when hideProgress is called.
+	 * The progress indicator remains visible until hideProgress is called, and it
+	 * provides visual feedback on long-running operations with periodic updates
+	 * to keep the user informed about what's happening.
 	 *
-	 * @param message - The progress message to display to the user
+	 * @param message - The initial progress message to display to the user
 	 *
 	 * @example
 	 * ```typescript
@@ -263,17 +264,73 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler implements Api
 	 * ```
 	 */
 	private showProgress(message: string): void {
+		// Store the current operation state
+		const operationState = {
+			currentPhase: "Starting",
+			progress: 0,
+			lastUpdateTime: Date.now(),
+			estimatedCompletionTime: Date.now() + 30000, // Initial estimate: 30 seconds
+		}
+
 		vscode.window.withProgress(
 			{
 				location: vscode.ProgressLocation.Notification,
 				title: message,
 				cancellable: false,
 			},
-			async (_progress) => {
+			async (progress) => {
+				// Set up periodic progress updates for long-running operations
+				const updateInterval = setInterval(() => {
+					// Update progress incrementally for long-running operations
+					if (operationState.progress < 90) {
+						// Calculate a non-linear progress increase that slows down as we approach 100%
+						// This gives a better perception of progress for operations of unknown length
+						// Calculate progress increment based on elapsed time
+						const progressIncrement = Math.max(0.5, 5 * Math.exp(-operationState.progress / 20))
+
+						operationState.progress += progressIncrement
+
+						// Determine the current phase based on progress
+						if (operationState.progress < 20) {
+							operationState.currentPhase = "Preparing"
+						} else if (operationState.progress < 50) {
+							operationState.currentPhase = "Processing"
+						} else if (operationState.progress < 80) {
+							operationState.currentPhase = "Finalizing"
+						} else {
+							operationState.currentPhase = "Almost complete"
+						}
+
+						// Calculate remaining progress and estimate completion time
+						const remainingProgress = 100 - operationState.progress
+						// Use current time and progress rate to estimate completion time
+						const timeElapsedSinceStart = Date.now() - operationState.lastUpdateTime
+						const estimatedTimeRemaining =
+							operationState.progress > 0
+								? (timeElapsedSinceStart / operationState.progress) * remainingProgress
+								: 30000 // Default estimate if no progress yet
+						operationState.estimatedCompletionTime = Date.now() + estimatedTimeRemaining
+
+						// Report progress update to the UI
+						progress.report({
+							message: `${operationState.currentPhase} (${Math.round(operationState.progress)}%)`,
+							increment: progressIncrement,
+						})
+					}
+				}, 1000) // Update every second
+
 				// This promise resolves when hideProgress is called
 				return new Promise<void>((resolve) => {
 					// Store the resolve function to be called later
 					this.hideProgress = () => {
+						clearInterval(updateInterval)
+
+						// Show 100% completion before resolving
+						progress.report({
+							message: "Complete",
+							increment: 100 - operationState.progress,
+						})
+
 						resolve()
 					}
 				})

@@ -179,12 +179,12 @@ export class FileDetector {
 		// 1. Claude Code CLI specific output patterns
 		const cliPatterns = [
 			// Direct reports from Claude Code CLI
-			new RegExp(String.raw`writing to file\s+${quotedPathPattern}\s*:`, "i"),
-			new RegExp(String.raw`created file\s+${quotedPathPattern}`, "i"),
-			new RegExp(String.raw`updated file\s+${quotedPathPattern}`, "i"),
-			new RegExp(String.raw`deleting file\s+${quotedPathPattern}`, "i"),
+			new RegExp(String.raw`writing to file\s+${quotedPathPattern}\s*:`, "ig"),
+			new RegExp(String.raw`created file\s+${quotedPathPattern}`, "ig"),
+			new RegExp(String.raw`updated file\s+${quotedPathPattern}`, "ig"),
+			new RegExp(String.raw`deleting file\s+${quotedPathPattern}`, "ig"),
 			// Rename operations (special case with two paths)
-			new RegExp(String.raw`renaming file\s+${quotedPathPattern}\s+to\s+${quotedPathPattern}`, "i"),
+			new RegExp(String.raw`renaming file\s+${quotedPathPattern}\s+to\s+${quotedPathPattern}`, "ig"),
 		]
 
 		// 2. Natural language patterns that indicate file modifications
@@ -207,34 +207,34 @@ export class FileDetector {
 			// Past tense patterns
 			new RegExp(
 				String.raw`I(?:'ve| have) (${verbs}) (?:the file|file|a file|code in|changes to) (?:at |in |to |)${quotedPathPattern}`,
-				"i",
+				"ig",
 			),
-			new RegExp(String.raw`I(?:'ve| have) applied the changes to ${quotedPathPattern}`, "i"),
-			new RegExp(String.raw`(?:File|Changes) (?:${verbs}): ${quotedPathPattern}`, "i"),
+			new RegExp(String.raw`I(?:'ve| have) applied the changes to ${quotedPathPattern}`, "ig"),
+			new RegExp(String.raw`(?:File|Changes) (?:${verbs}): ${quotedPathPattern}`, "ig"),
 			new RegExp(
 				String.raw`(?:I've|I have|I've just|I just) (?:completed|finished) (?:creating|modifying|updating|writing) ${quotedPathPattern}`,
-				"i",
+				"ig",
 			),
-			new RegExp(String.raw`(?:The file|File) ${quotedPathPattern} has been (?:${verbs})`, "i"),
+			new RegExp(String.raw`(?:The file|File) ${quotedPathPattern} has been (?:${verbs})`, "ig"),
 
 			// Future/present tense patterns
 			new RegExp(
 				String.raw`I(?:'ll| will|'m going to) (?:now |)(?:${futureVerbs})(?: a file| the file| changes to| code in)? (?:at |in |to |)${quotedPathPattern}`,
-				"i",
+				"ig",
 			),
 			new RegExp(
 				String.raw`Let(?:'s| us) (?:${futureVerbs})(?: a file| the file| changes to)? (?:at |in |to |called |named |)${quotedPathPattern}`,
-				"i",
+				"ig",
 			),
 
 			// Code content patterns
 			new RegExp(
 				String.raw`(?:Here's|I've created|Here is) the (?:complete |)(?:code|content|implementation) for ${quotedPathPattern}`,
-				"i",
+				"ig",
 			),
 			new RegExp(
 				String.raw`This is the (?:updated|new|complete|modified) (?:code|content|implementation) for ${quotedPathPattern}`,
-				"i",
+				"ig",
 			),
 		]
 
@@ -243,9 +243,9 @@ export class FileDetector {
 			// Markdown code blocks with filename headers
 			new RegExp(String.raw`\`\`\`(?:\w+)?\s*(?:\/\/|#)\s*(${pathPattern})\s*\n([\s\S]*?)\`\`\``, "g"),
 			// File content delimiters
-			new RegExp(String.raw`(?:File:(?:\s+|:)|Content of ${quotedPathPattern}:)\s*\n`, "i"),
+			new RegExp(String.raw`(?:File:(?:\s+|:)|Content of ${quotedPathPattern}:)\s*\n`, "ig"),
 			// File as title + code block pattern
-			new RegExp(String.raw`## (?:File: |)${quotedPathPattern}\s*\n+\`\`\``, "i"),
+			new RegExp(String.raw`## (?:File: |)${quotedPathPattern}\s*\n+\`\`\``, "ig"),
 		]
 
 		// Combine all patterns for processing
