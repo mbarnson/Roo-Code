@@ -21,11 +21,5 @@
 		"useUnknownInCatchVariables": false
 	},
 	"include": ["src/**/*", "scripts/**/*", ".changeset/**/*"],
-	"exclude": [
-		"node_modules", 
-		".vscode-test", 
-		"webview-ui", 
-		"src/provider/claude-code/**/*.ts",
-		"src/api/providers/claude-code*.ts"
-	]
+	"exclude": ["node_modules", ".vscode-test", "webview-ui"]
 }
