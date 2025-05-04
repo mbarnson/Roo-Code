@@ -877,24 +877,19 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 /**
  * Testing interface for VsCodeIntegratedClaudeCode
  *
- * Exposes private methods for testing purposes in a controlled way.
+ * Exposes implementation details for testing purposes in a controlled way.
  * This interface should only be used in tests.
  */
 export interface VsCodeIntegratedClaudeCodeTestingInterface {
+	// Public properties we want to expose
 	openedTabs: Set<string>
 	fileContextTracker?: FileContextTracker
 	diffViewProvider?: DiffViewProviderType
 	statusReporter?: StatusReporter
-	parseFileOperationsFromResponse(response: string): FileOperation[]
-	fileExists(path: string): boolean
-	removeFileOperationsFromResponse(response: string): string
-	openFileInTab(filePath: string): Promise<vscode.TextEditor | undefined>
-	updateFileContext(filePath: string): void
-	updateStatus(status: string): void
-	showInfo(message: string): void
-	showWarning(message: string): void
-	showSuccess(message: string): void
-	handleError(error: Error | ClaudeCodeError): void
+
+	// Test-specific functionality
+	testParseFileOperations(response: string): FileOperation[]
+	testRemoveFileOperations(response: string): string
 }
 
 /**
@@ -913,32 +908,30 @@ export function createVsCodeIntegratedClaudeCode(
 }
 
 /**
- * Add _exposeForTesting method to the VsCodeIntegratedClaudeCode class
+ * Static method to expose implementation details for testing purposes
  */
-VsCodeIntegratedClaudeCode.prototype._exposeForTesting = function (): VsCodeIntegratedClaudeCodeTestingInterface {
+export function _exposeForTesting(instance: VsCodeIntegratedClaudeCode): VsCodeIntegratedClaudeCodeTestingInterface {
 	return {
+		// Expose the public properties
 		get openedTabs() {
-			return this.openedTabs
+			return (instance as any).openedTabs
 		},
 		get fileContextTracker() {
-			return this.fileContextTracker
+			return (instance as any).fileContextTracker
 		},
 		get diffViewProvider() {
-			return this.diffViewProvider
+			return (instance as any).diffViewProvider
 		},
 		get statusReporter() {
-			return this.statusReporter
+			return (instance as any).statusReporter
 		},
 
-		parseFileOperationsFromResponse: this.parseFileOperationsFromResponse.bind(this),
-		fileExists: this.fileExists.bind(this),
-		removeFileOperationsFromResponse: this.removeFileOperationsFromResponse.bind(this),
-		openFileInTab: this.openFileInTab.bind(this),
-		updateFileContext: this.updateFileContext.bind(this),
-		updateStatus: this.updateStatus.bind(this),
-		showInfo: this.showInfo.bind(this),
-		showWarning: this.showWarning.bind(this),
-		showSuccess: this.showSuccess.bind(this),
-		handleError: this.handleError.bind(this),
+		// Expose test-specific methods that wrap private methods
+		testParseFileOperations: (response: string) => {
+			return (instance as any).parseFileOperationsFromResponse.call(instance, response)
+		},
+		testRemoveFileOperations: (response: string) => {
+			return (instance as any).removeFileOperationsFromResponse.call(instance, response)
+		},
 	}
 }

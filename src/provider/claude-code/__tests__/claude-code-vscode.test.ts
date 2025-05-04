@@ -1,5 +1,9 @@
 import type { PromptOptions } from "../common-types"
-import { VsCodeIntegratedClaudeCode, VsCodeIntegratedClaudeCodeTestingInterface } from "../claude-code-vscode"
+import {
+	VsCodeIntegratedClaudeCode,
+	VsCodeIntegratedClaudeCodeTestingInterface,
+	_exposeForTesting,
+} from "../claude-code-vscode"
 
 // Mock dependencies
 jest.mock("vscode", () => ({
@@ -96,7 +100,7 @@ describe("VsCodeIntegratedClaudeCode", () => {
 		})
 
 		// Access the testing interface
-		testingInterface = claudeCode._exposeForTesting()
+		testingInterface = _exposeForTesting(claudeCode)
 
 		// Mock the completePrompt method to avoid actual execution
 		claudeCode.completePrompt = jest.fn().mockResolvedValue({
@@ -119,10 +123,10 @@ describe("VsCodeIntegratedClaudeCode", () => {
 		})
 	})
 
-	describe("parseFileOperationsFromResponse", () => {
+	describe("testParseFileOperations", () => {
 		it("should parse file creation operations", () => {
 			const response = "I've created a new file called `/tmp/example.js`:\n```js\nconsole.log('Hello');\n```"
-			const operations = testingInterface.parseFileOperationsFromResponse(response)
+			const operations = testingInterface.testParseFileOperations(response)
 
 			expect(operations).toHaveLength(1)
 			expect(operations[0]).toEqual({
@@ -134,7 +138,7 @@ describe("VsCodeIntegratedClaudeCode", () => {
 
 		it("should parse file update operations", () => {
 			const response = "I've updated the file `/tmp/example.js`:\n```js\nconsole.log('Updated');\n```"
-			const operations = testingInterface.parseFileOperationsFromResponse(response)
+			const operations = testingInterface.testParseFileOperations(response)
 
 			expect(operations).toHaveLength(1)
 			expect(operations[0]).toEqual({
@@ -146,7 +150,7 @@ describe("VsCodeIntegratedClaudeCode", () => {
 
 		it("should parse file deletion operations", () => {
 			const response = "I've deleted the file `/tmp/example.js`"
-			const operations = testingInterface.parseFileOperationsFromResponse(response)
+			const operations = testingInterface.testParseFileOperations(response)
 
 			expect(operations).toHaveLength(1)
 			expect(operations[0]).toEqual({
@@ -157,7 +161,7 @@ describe("VsCodeIntegratedClaudeCode", () => {
 
 		it("should parse file rename operations", () => {
 			const response = "I've renamed the file `/tmp/old.js` to `/tmp/new.js`"
-			const operations = testingInterface.parseFileOperationsFromResponse(response)
+			const operations = testingInterface.testParseFileOperations(response)
 
 			expect(operations).toHaveLength(1)
 			expect(operations[0]).toEqual({
@@ -168,10 +172,10 @@ describe("VsCodeIntegratedClaudeCode", () => {
 		})
 	})
 
-	describe("removeFileOperationsFromResponse", () => {
+	describe("testRemoveFileOperations", () => {
 		it("should replace file creation notices with VS Code appropriate message", () => {
 			const response = "I've created a new file called `/tmp/example.js`:\n```js\nconsole.log('Hello');\n```"
-			const modified = testingInterface.removeFileOperationsFromResponse(response)
+			const modified = testingInterface.testRemoveFileOperations(response)
 
 			expect(modified).toContain("File /tmp/example.js has been created in VS Code")
 			expect(modified).not.toContain("console.log('Hello');")
@@ -179,7 +183,7 @@ describe("VsCodeIntegratedClaudeCode", () => {
 
 		it("should replace file update notices with VS Code appropriate message", () => {
 			const response = "I've updated the file `/tmp/example.js`:\n```js\nconsole.log('Updated');\n```"
-			const modified = testingInterface.removeFileOperationsFromResponse(response)
+			const modified = testingInterface.testRemoveFileOperations(response)
 
 			expect(modified).toContain("File /tmp/example.js has been updated in VS Code")
 			expect(modified).not.toContain("console.log('Updated');")
@@ -187,14 +191,14 @@ describe("VsCodeIntegratedClaudeCode", () => {
 
 		it("should replace file deletion notices with VS Code appropriate message", () => {
 			const response = "I've deleted the file `/tmp/example.js`"
-			const modified = testingInterface.removeFileOperationsFromResponse(response)
+			const modified = testingInterface.testRemoveFileOperations(response)
 
 			expect(modified).toContain("File /tmp/example.js has been deleted in VS Code")
 		})
 
 		it("should replace file rename notices with VS Code appropriate message", () => {
 			const response = "I've renamed the file `/tmp/old.js` to `/tmp/new.js`"
-			const modified = testingInterface.removeFileOperationsFromResponse(response)
+			const modified = testingInterface.testRemoveFileOperations(response)
 
 			expect(modified).toContain("File /tmp/old.js has been renamed to /tmp/new.js in VS Code")
 		})
