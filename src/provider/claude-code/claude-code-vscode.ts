@@ -8,6 +8,7 @@ import type { CompletionResponse, PromptOptions, ProviderOptions } from "./commo
 import { ClaudeCodeError, ClaudeCodeVsCodeError, getUserFriendlyErrorMessage } from "./errors"
 import { createFile, updateFile, deleteFile, renameFile, trackFileContext } from "./file-utils"
 import { normalizePath } from "./path-utils"
+import { IStatusReporter } from "./status-reporter"
 
 // Wrapper for t function to handle record type with default value
 function tFormat(key: string, defaultValue: string, params?: Record<string, any>): string {
@@ -43,15 +44,11 @@ export interface FileOperation {
 }
 
 /**
- * Interface for status reporting
+ * @deprecated Use IStatusReporter from status-reporter.ts instead
+ * Interface for status reporting kept for backward compatibility
+ * @see IStatusReporter
  */
-export interface StatusReporter {
-	updateStatus(status: string): void
-	showError(error: Error): void
-	showInfo(message: string): void
-	showWarning?(message: string): void
-	showSuccess?(message: string): void
-}
+export interface StatusReporter extends IStatusReporter {}
 
 /**
  * Options for the VS Code integrated Claude Code Handler
@@ -802,52 +799,98 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 
 	/**
 	 * Update status
+	 * @param status The new status text
 	 */
 	private updateStatus(status: string): void {
+		if (typeof status !== "string") {
+			console.warn("updateStatus called with non-string value:", status)
+			status = String(status || "")
+		}
+
 		this.statusBarItem.text = `Claude Code: ${status}`
 
 		if (this.statusReporter) {
-			this.statusReporter.updateStatus(status)
+			try {
+				this.statusReporter.updateStatus(status)
+			} catch (error) {
+				console.error("Error updating status:", error)
+			}
 		}
 	}
 
 	/**
 	 * Show info message
+	 * @param message The message to show
 	 */
 	private showInfo(message: string): void {
+		if (typeof message !== "string") {
+			console.warn("showInfo called with non-string value:", message)
+			message = String(message || "")
+		}
+
 		vscode.window.showInformationMessage(message)
 
 		if (this.statusReporter) {
-			this.statusReporter.showInfo(message)
+			try {
+				this.statusReporter.showInfo(message)
+			} catch (error) {
+				console.error("Error showing info message:", error)
+			}
 		}
 	}
 
 	/**
 	 * Show warning message
+	 * @param message The message to show
 	 */
 	private showWarning(message: string): void {
+		if (typeof message !== "string") {
+			console.warn("showWarning called with non-string value:", message)
+			message = String(message || "")
+		}
+
 		vscode.window.showWarningMessage(message)
 
-		if (this.statusReporter && this.statusReporter.showWarning) {
-			this.statusReporter.showWarning(message)
+		if (this.statusReporter) {
+			try {
+				this.statusReporter.showWarning(message)
+			} catch (error) {
+				console.error("Error showing warning message:", error)
+			}
 		}
 	}
 
 	/**
 	 * Show success message
+	 * @param message The message to show
 	 */
 	private showSuccess(message: string): void {
+		if (typeof message !== "string") {
+			console.warn("showSuccess called with non-string value:", message)
+			message = String(message || "")
+		}
+
 		vscode.window.showInformationMessage(message)
 
-		if (this.statusReporter && this.statusReporter.showSuccess) {
-			this.statusReporter.showSuccess(message)
+		if (this.statusReporter) {
+			try {
+				this.statusReporter.showSuccess(message)
+			} catch (error) {
+				console.error("Error showing success message:", error)
+			}
 		}
 	}
 
 	/**
 	 * Handle error with proper error classification and user-friendly messages
+	 * @param error The error to handle
 	 */
 	private handleError(error: Error | ClaudeCodeError): void {
+		if (!error) {
+			console.warn("handleError called with null or undefined error")
+			error = new Error("Unknown error occurred")
+		}
+
 		// Convert generic errors to ClaudeCodeError
 		const claudeError = error instanceof ClaudeCodeError ? error : new ClaudeCodeError(error.message, error)
 
@@ -862,7 +905,12 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 
 		// Report to status reporter if available
 		if (this.statusReporter) {
-			this.statusReporter.showError(claudeError)
+			try {
+				this.statusReporter.showError(claudeError)
+			} catch (reporterError) {
+				// If status reporter fails, log the error but don't fail the entire operation
+				console.error("Error reporting status:", reporterError)
+			}
 		}
 	}
 
