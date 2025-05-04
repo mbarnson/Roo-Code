@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { VsCodeIntegratedClaudeCode, createVsCodeIntegratedClaudeCode } from "../claude-code-vscode"
+import { VsCodeIntegratedClaudeCode, createVsCodeIntegratedClaudeCode } from "../claude-code-vscode-integrated"
 import { ClaudeCodeHandler } from "../claude-code"
 import { DiffViewProvider } from "../../../integrations/editor/DiffViewProvider"
 import { FileContextTracker } from "../../../core/context-tracking/FileContextTracker"
@@ -43,10 +43,10 @@ describe("VsCodeIntegratedClaudeCode", () => {
 			{
 				claudeCodePath: "claude-code",
 				claudeCodeModelId: "claude-3-sonnet-20240229",
+				cwd: "/test/workspace",
 			},
 			mockDiffViewProvider,
 			mockFileContextTracker,
-			"/test/workspace",
 		)
 	})
 

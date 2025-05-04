@@ -127,6 +127,8 @@ export interface WebviewMessage {
 		| "searchFiles"
 		| "toggleApiConfigPin"
 		| "setHistoryPreviewCollapsed"
+		| "requestClaudeCodeStatus"
+		| "clearClaudeCodeMessages"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse

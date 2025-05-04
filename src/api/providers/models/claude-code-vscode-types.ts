@@ -35,12 +35,7 @@ export interface VsCodeIntegratedClaudeCodeOptions {
 
 	/** Whether to show diff views for file modifications */
 	claudeCodeShowDiffViews?: boolean
-}
 
-/**
- * Options for creating a VS Code integrated Claude Code handler
- */
-export interface CreateVsCodeIntegratedClaudeCodeOptions extends VsCodeIntegratedClaudeCodeOptions {
 	/** Working directory for resolving file paths */
 	cwd?: string
 }
@@ -51,7 +46,9 @@ export interface CreateVsCodeIntegratedClaudeCodeOptions extends VsCodeIntegrate
 export type FileModificationsMap = Map<string, string>
 
 /**
- * Error formatting operation type
+ * Error formatting operation type for VS Code integration
+ * This type is superseded by the one in error-formatter.ts and should be removed in a future cleanup
+ * @deprecated Use ErrorFormattingOperation from error-formatter.ts instead
  */
 export type ErrorFormattingOperation = "message generation" | "completion" | "file modification" | "file reading"
 
