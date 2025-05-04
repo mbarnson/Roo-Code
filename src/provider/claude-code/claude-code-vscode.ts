@@ -5,6 +5,9 @@ import { ClaudeCodeHandler } from "./claude-code"
 import type { DiffViewProvider as DiffViewProviderType } from "./diff-view-provider"
 import { t } from "../../i18n"
 import type { CompletionResponse, PromptOptions, ProviderOptions } from "./common-types"
+import { ClaudeCodeError, ClaudeCodeVsCodeError, getUserFriendlyErrorMessage } from "./errors"
+import { createFile, updateFile, deleteFile, renameFile, trackFileContext } from "./file-utils"
+import { normalizePath } from "./path-utils"
 
 // Wrapper for t function to handle record type with default value
 function tFormat(key: string, defaultValue: string, params?: Record<string, any>): string {
@@ -129,8 +132,39 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 			return result
 		} catch (error) {
 			this.updateStatus(tFormat("common:status.claude_code.error", "Error"))
-			this.handleError(error)
-			throw error
+
+			// Properly classify the error
+			const originalError = error instanceof Error ? error : new Error(String(error))
+			let classifiedError: ClaudeCodeError
+
+			if (
+				originalError.message.includes("not authenticated") ||
+				originalError.message.includes("authentication") ||
+				originalError.message.includes("login")
+			) {
+				classifiedError = new ClaudeCodeError(
+					"Authentication error with Claude Code CLI. Please run 'claude-code login' in your terminal.",
+					originalError,
+				)
+			} else if (originalError.message.includes("timeout") || originalError.message.includes("timed out")) {
+				classifiedError = new ClaudeCodeError(
+					"Operation timed out. The request might be too complex or there might be network issues.",
+					originalError,
+				)
+			} else if (
+				originalError.message.includes("rate limit") ||
+				originalError.message.includes("too many requests")
+			) {
+				classifiedError = new ClaudeCodeError(
+					"Rate limit exceeded with Claude Code CLI. Please try again later.",
+					originalError,
+				)
+			} else {
+				classifiedError = new ClaudeCodeError(originalError.message, originalError)
+			}
+
+			this.handleError(classifiedError)
+			throw classifiedError // Use our classified error
 		}
 	}
 
@@ -678,165 +712,83 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 	/**
 	 * Create a file and open it in a tab
 	 */
-	private async createFile(path: string, content: string): Promise<void> {
-		try {
-			// Ensure the directory exists
-			const dirUri = vscode.Uri.file(path.substring(0, path.lastIndexOf("/")))
-			await vscode.workspace.fs.createDirectory(dirUri)
-
-			// Create the file
-			const fileUri = vscode.Uri.file(path)
-			await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content))
-
-			// Open the file in a tab
-			await this.openFileInTab(path)
-
-			// Update context tracking
-			this.updateFileContext(path)
-
-			// Log creation
-			this.showSuccess(tFormat("claudeCode.info.fileCreated", "Created file: {path}", { path }))
-		} catch (error) {
-			this.handleError(
-				new Error(tFormat("claudeCode.error.createFailed", "Failed to create file {path}", { path })),
-			)
-		}
+	private async createFile(filePath: string, content: string): Promise<void> {
+		// Use the utility function with proper options
+		await createFile(filePath, content, {
+			fileContextTracker: this.fileContextTracker,
+			statusReporter: this.statusReporter,
+			errorHandler: (error) => this.handleError(error),
+			translationFunction: tFormat,
+		})
 	}
 
 	/**
 	 * Update a file with diff view if available
 	 */
-	private async updateFile(path: string, content: string): Promise<void> {
-		try {
-			// Get the current file content
-			const fileUri = vscode.Uri.file(path)
-			let currentContent = ""
-
-			try {
-				const fileData = await vscode.workspace.fs.readFile(fileUri)
-				currentContent = Buffer.from(fileData).toString("utf8")
-			} catch (error) {
-				// File doesn't exist, treat as create
-				return this.createFile(path, content)
-			}
-
-			// If the content is the same, no need to update
-			if (currentContent === content) {
-				return
-			}
-
-			// Use diff view if available
-			if (this.diffViewProvider) {
-				const approved = await this.diffViewProvider.showDiff(path, currentContent, content)
-
-				if (!approved) {
-					this.showInfo(tFormat("claudeCode.info.updateRejected", "Update to {path} was rejected", { path }))
-					return
-				}
-			}
-
-			// Update the file
-			await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content))
-
-			// Open the file in a tab
-			await this.openFileInTab(path)
-
-			// Update context tracking
-			this.updateFileContext(path)
-
-			// Log update
-			this.showSuccess(tFormat("claudeCode.info.fileUpdated", "Updated file: {path}", { path }))
-		} catch (error) {
-			this.handleError(
-				new Error(tFormat("claudeCode.error.updateFailed", "Failed to update file {path}", { path })),
-			)
-		}
+	private async updateFile(filePath: string, content: string): Promise<void> {
+		// Use the utility function with proper options
+		await updateFile(filePath, content, {
+			diffViewProvider: this.diffViewProvider,
+			fileContextTracker: this.fileContextTracker,
+			statusReporter: this.statusReporter,
+			errorHandler: (error) => this.handleError(error),
+			translationFunction: tFormat,
+		})
 	}
 
 	/**
 	 * Delete a file with confirmation
 	 */
-	private async deleteFile(path: string): Promise<void> {
-		try {
-			// Confirm deletion
-			const confirmed = await vscode.window.showWarningMessage(
-				tFormat("claudeCode.warning.confirmDelete", "Are you sure you want to delete {path}?", { path }),
-				{ modal: true },
-				tFormat("claudeCode.button.delete", "Delete"),
-			)
-
-			if (confirmed !== tFormat("claudeCode.button.delete", "Delete")) {
-				return
-			}
-
-			// Delete the file
-			const fileUri = vscode.Uri.file(path)
-			await vscode.workspace.fs.delete(fileUri)
-
-			// Remove from opened tabs
-			this.openedTabs.delete(path)
-
-			// Log deletion
-			this.showSuccess(tFormat("claudeCode.info.fileDeleted", "Deleted file: {path}", { path }))
-		} catch (error) {
-			this.handleError(
-				new Error(tFormat("claudeCode.error.deleteFailed", "Failed to delete file {path}", { path })),
-			)
-		}
+	private async deleteFile(filePath: string): Promise<void> {
+		// Use the utility function with proper options
+		await deleteFile(
+			filePath,
+			{
+				statusReporter: this.statusReporter,
+				errorHandler: (error) => this.handleError(error),
+				translationFunction: tFormat,
+			},
+			this.openedTabs,
+		)
 	}
 
 	/**
 	 * Rename a file
 	 */
 	private async renameFile(oldPath: string, newPath: string): Promise<void> {
-		try {
-			// Get the current file content
-			const oldUri = vscode.Uri.file(oldPath)
-			const newUri = vscode.Uri.file(newPath)
-
-			// Ensure the directory exists
-			const dirUri = vscode.Uri.file(newPath.substring(0, newPath.lastIndexOf("/")))
-			await vscode.workspace.fs.createDirectory(dirUri)
-
-			// Rename the file
-			await vscode.workspace.fs.rename(oldUri, newUri)
-
-			// Open the new file in a tab
-			await this.openFileInTab(newPath)
-
-			// Update context tracking
-			this.updateFileContext(newPath)
-
-			// Remove old file from tracking
-			this.openedTabs.delete(oldPath)
-
-			// Log rename
-			this.showSuccess(
-				tFormat("claudeCode.info.fileRenamed", "Renamed file: {oldPath} to {newPath}", { oldPath, newPath }),
-			)
-		} catch (error) {
-			this.handleError(
-				new Error(
-					tFormat("claudeCode.error.renameFailed", "Failed to rename file {oldPath} to {newPath}", {
-						oldPath,
-						newPath,
-					}),
-				),
-			)
-		}
+		// Use the utility function with proper options
+		await renameFile(
+			oldPath,
+			newPath,
+			{
+				fileContextTracker: this.fileContextTracker,
+				statusReporter: this.statusReporter,
+				errorHandler: (error) => this.handleError(error),
+				translationFunction: tFormat,
+			},
+			this.openedTabs,
+		)
 	}
 
 	/**
 	 * Open a file in a tab
 	 */
-	private async openFileInTab(path: string): Promise<vscode.TextEditor | undefined> {
+	private async openFileInTab(filePath: string): Promise<vscode.TextEditor | undefined> {
 		try {
-			const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path))
+			const normalizedPath = normalizePath(filePath)
+			const document = await vscode.workspace.openTextDocument(vscode.Uri.file(normalizedPath))
 			const editor = await vscode.window.showTextDocument(document, { preview: false })
-			this.openedTabs.add(path)
+			this.openedTabs.add(normalizedPath)
 			return editor
 		} catch (error) {
-			this.handleError(new Error(tFormat("claudeCode.error.openFailed", "Failed to open file {path}", { path })))
+			const originalError = error instanceof Error ? error : new Error(String(error))
+			this.handleError(
+				new ClaudeCodeVsCodeError(
+					tFormat("claudeCode.error.openFailed", "Failed to open file {path}", { path: filePath }),
+					"openTextDocument",
+					originalError,
+				),
+			)
 			return undefined
 		}
 	}
@@ -844,10 +796,8 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 	/**
 	 * Update file context
 	 */
-	private updateFileContext(path: string): void {
-		if (this.fileContextTracker) {
-			this.fileContextTracker.trackFile(path)
-		}
+	private updateFileContext(filePath: string): void {
+		trackFileContext(filePath, this.fileContextTracker)
 	}
 
 	/**
@@ -895,13 +845,24 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 	}
 
 	/**
-	 * Handle error
+	 * Handle error with proper error classification and user-friendly messages
 	 */
-	private handleError(error: Error): void {
-		vscode.window.showErrorMessage(error.message)
+	private handleError(error: Error | ClaudeCodeError): void {
+		// Convert generic errors to ClaudeCodeError
+		const claudeError = error instanceof ClaudeCodeError ? error : new ClaudeCodeError(error.message, error)
 
+		// Get user-friendly message
+		const userMessage = getUserFriendlyErrorMessage(claudeError)
+
+		// Show error message
+		vscode.window.showErrorMessage(userMessage)
+
+		// Log detailed error for debugging
+		console.error(`Claude Code error (${claudeError.name}): ${claudeError.message}`, claudeError)
+
+		// Report to status reporter if available
 		if (this.statusReporter) {
-			this.statusReporter.showError(error)
+			this.statusReporter.showError(claudeError)
 		}
 	}
 

@@ -120,58 +120,78 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * @returns Normalized path or "claude-code" if using default
 	 */
 	private validateCliPath(path?: string): string {
-		if (!path) {
-			return "claude-code" // Default executable name
-		}
+		// Import the validateCliPath function from path-utils at run time to avoid circular dependencies
+		try {
+			// Use dynamic import to avoid circular dependencies
+			const pathUtils = require("../../provider/claude-code/path-utils")
+			return pathUtils.validateCliPath(path)
+		} catch (error) {
+			// Fall back to built-in validation if path-utils is not available
 
-		// Trim whitespace
-		const trimmedPath = path.trim()
+			if (!path) {
+				return "claude-code" // Default executable name
+			}
 
-		// If empty after trimming, use default
-		if (!trimmedPath) {
-			return "claude-code"
-		}
+			// Trim whitespace
+			const trimmedPath = path.trim()
 
-		// Enhanced security validation for CLI path
-
-		// 1. Check for shell metacharacters and other dangerous patterns
-		const dangerousPatterns = [
-			/[;&|<>$`\\"\s]/, // Basic shell metacharacters
-			/\(\)/, // Command substitution
-			/\{\}/, // Brace expansion
-			/\[\]/, // Globbing
-			/\*\?/, // Wildcard characters
-			/\.\./, // Path traversal
-			/~/, // Home directory expansion
-			/env/, // Environment variables
-			/sudo/, // Privilege escalation
-			/\/bin\//, // Direct path to system binaries
-			/\/etc\//, // System configuration files
-		]
-
-		// Check each pattern and reject if any match
-		for (const pattern of dangerousPatterns) {
-			if (pattern.test(trimmedPath)) {
-				console.warn(`Potentially unsafe characters in CLI path: "${trimmedPath}". Using default instead.`)
+			// If empty after trimming, use default
+			if (!trimmedPath) {
 				return "claude-code"
 			}
-		}
 
-		// 2. Only allow alphanumeric characters, dashes, underscores, forward slashes, and dots
-		// This is a whitelist approach that only permits safe characters
-		const safePathPattern = /^[a-zA-Z0-9_\-\/\.]+$/
-		if (!safePathPattern.test(trimmedPath)) {
-			console.warn(`CLI path contains invalid characters: "${trimmedPath}". Using default instead.`)
-			return "claude-code"
-		}
+			// Enhanced security validation for CLI path
 
-		// 3. Maximum reasonable path length - prevent buffer overflow attacks
-		if (trimmedPath.length > 1024) {
-			console.warn(`CLI path too long (${trimmedPath.length} chars). Using default instead.`)
-			return "claude-code"
-		}
+			// 1. Check for shell metacharacters and other dangerous patterns
+			const dangerousPatterns = [
+				/[;&|<>$`\\"\s]/, // Basic shell metacharacters
+				/\(\)/, // Command substitution
+				/\{\}/, // Brace expansion
+				/\[\]/, // Globbing
+				/\*\?/, // Wildcard characters
+				/\.\./, // Path traversal
+				/~/, // Home directory expansion
+				/env/, // Environment variables
+				/sudo/, // Privilege escalation
+				/\/bin\//, // Direct path to system binaries
+				/\/etc\//, // System configuration files
+			]
 
-		return trimmedPath
+			// Check each pattern and reject if any match
+			for (const pattern of dangerousPatterns) {
+				if (pattern.test(trimmedPath)) {
+					console.warn(`Potentially unsafe characters in CLI path: "${trimmedPath}". Using default instead.`)
+					return "claude-code"
+				}
+			}
+
+			// 2. Only allow alphanumeric characters, dashes, underscores, forward slashes, and dots
+			// This is a whitelist approach that only permits safe characters
+			const safePathPattern = /^[a-zA-Z0-9_\-\/\.]+$/
+			if (!safePathPattern.test(trimmedPath)) {
+				console.warn(`CLI path contains invalid characters: "${trimmedPath}". Using default instead.`)
+				return "claude-code"
+			}
+
+			// 3. Maximum reasonable path length - prevent buffer overflow attacks
+			if (trimmedPath.length > 1024) {
+				console.warn(`CLI path too long (${trimmedPath.length} chars). Using default instead.`)
+				return "claude-code"
+			}
+
+			// 4. Handle Windows .exe extension if needed
+			if (
+				process.platform === "win32" &&
+				!trimmedPath.endsWith(".exe") &&
+				!trimmedPath.includes("\\") &&
+				!trimmedPath.includes("/")
+			) {
+				// For Windows, add .exe extension to command names without path separators
+				return `${trimmedPath}.exe`
+			}
+
+			return trimmedPath
+		}
 	}
 
 	/**
@@ -295,6 +315,22 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * @param timeout - Optional timeout in milliseconds (defaults to 60 seconds)
 	 */
 	private async executeClaudeCodeCommand(
+		command: string[],
+		input?: string,
+		timeout = 60000,
+	): Promise<AsyncIterable<string>> {
+		// Import concurrency utilities dynamically to avoid circular dependencies
+		const { executeWithConcurrencyControl } = require("../../provider/claude-code/concurrency-utils")
+
+		// Use concurrency control to limit simultaneous CLI invocations
+		return executeWithConcurrencyControl(() => this.executeClaudeCodeCommandCore(command, input, timeout))
+	}
+
+	/**
+	 * Core implementation of Claude Code CLI command execution
+	 * @private
+	 */
+	private async executeClaudeCodeCommandCore(
 		command: string[],
 		input?: string,
 		timeout = 60000,
