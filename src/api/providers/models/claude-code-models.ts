@@ -1,45 +1,17 @@
 /**
  * Type definitions for Claude Code models and API responses
  */
+import { ClaudeModelInfo, ClaudeModelsMap } from "./claude-models"
 
 /**
- * Structured information about a Claude Code model
+ * Re-export the base Claude model info type as Claude Code model info
  */
-export interface ClaudeCodeModelInfo {
-	/** Maximum output tokens allowed */
-	maxTokens: number
-
-	/** Maximum context window size in tokens */
-	contextWindow: number
-
-	/** Whether the model supports image inputs */
-	supportsImages: boolean
-
-	/** Whether the model supports prompt caching */
-	supportsPromptCache: boolean
-
-	/** Whether the model supports computer use/tool use */
-	supportsComputerUse: boolean
-
-	/** Whether the model supports thinking mode (Claude 3.7+) */
-	thinking?: boolean
-
-	/** Input price per million tokens in USD */
-	inputPrice: number
-
-	/** Output price per million tokens in USD */
-	outputPrice: number
-
-	/** Human-readable description of the model */
-	description: string
-}
+export type ClaudeCodeModelInfo = ClaudeModelInfo
 
 /**
- * Map of Claude Code model IDs to their information
+ * Re-export the base Claude models map type as Claude Code models map
  */
-export type ClaudeCodeModelsMap = {
-	[key: string]: ClaudeCodeModelInfo
-}
+export type ClaudeCodeModelsMap = ClaudeModelsMap
 
 /**
  * Authentication status response from Claude Code CLI

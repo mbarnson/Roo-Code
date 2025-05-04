@@ -26,8 +26,8 @@ import { FakeAIHandler } from "./providers/fake-ai"
 import { XAIHandler } from "./providers/xai"
 import { ClaudeCodeHandler } from "./providers/claude-code"
 import { ClaudeCodeCommandOptions } from "./providers/models/claude-code-models"
-import { createVsCodeIntegratedClaudeCode } from "./providers/claude-code-vscode"
-import { CreateVsCodeIntegratedClaudeCodeOptions } from "./providers/models/claude-code-vscode-types"
+import { createVsCodeIntegratedClaudeCode } from "./providers/claude-code-vscode-integrated"
+import { VsCodeIntegratedClaudeCodeOptions } from "./providers/models/claude-code-vscode-types"
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
 import { ClineProvider } from "../core/webview/ClineProvider"
 import { createFileContextTracker } from "./providers/models/cline-provider-types"
@@ -121,7 +121,7 @@ export function buildApiHandler(configuration: ApiConfiguration, clineProvider?:
 				// Only use VS Code integration if fileContextTracker is available
 				if (fileContextTracker) {
 					// Create the VS Code integration options
-					const vsCodeOptions: CreateVsCodeIntegratedClaudeCodeOptions = {
+					const vsCodeOptions: VsCodeIntegratedClaudeCodeOptions = {
 						...claudeCodeOptions,
 						claudeCodeVsCodeIntegration: true,
 						claudeCodeFileTracking: true,
@@ -130,7 +130,7 @@ export function buildApiHandler(configuration: ApiConfiguration, clineProvider?:
 					}
 
 					// Create and return the VS Code integrated handler
-					return createVsCodeIntegratedClaudeCode(vsCodeOptions, diffViewProvider, fileContextTracker, cwd)
+					return createVsCodeIntegratedClaudeCode(vsCodeOptions, diffViewProvider, fileContextTracker)
 				}
 			}
 

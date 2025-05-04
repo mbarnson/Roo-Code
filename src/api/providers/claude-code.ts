@@ -9,16 +9,38 @@ import { XmlMatcher } from "../../utils/xml-matcher"
 import {
 	ClaudeCodeAuthStatus,
 	ClaudeCodeCommandOptions,
-	ClaudeCodeModelInfo,
 	ClaudeCodeModelsMap,
 	ClaudeCodeChatInput,
 } from "./models/claude-code-models"
+import { CLAUDE_MODELS, CLAUDE_FALLBACK_MODEL, getDefaultClaudeModelId } from "./models/claude-models"
 
 /**
  * Claude Code provider that uses the Claude Code CLI to interact with Claude
  */
 export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, SingleCompletionHandler {
-	// Check if Claude Code is authenticated
+	/**
+	 * Check if the user is authenticated with the Claude Code CLI
+	 *
+	 * This static method executes the Claude Code CLI auth status command and parses
+	 * the result to determine if the user is authenticated. It handles command execution,
+	 * output parsing, and error handling.
+	 *
+	 * @param claudeCodePath - Path to the Claude Code CLI executable (defaults to "claude-code")
+	 * @returns Promise resolving to true if authenticated, false otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * // Check authentication with default CLI path
+	 * const isAuthenticated = await ClaudeCodeHandler.checkAuthentication();
+	 *
+	 * // Check authentication with custom CLI path
+	 * const isAuthenticated = await ClaudeCodeHandler.checkAuthentication("/usr/local/bin/claude-code");
+	 *
+	 * if (!isAuthenticated) {
+	 *   console.log("Please run 'claude-code login' to authenticate");
+	 * }
+	 * ```
+	 */
 	public static async checkAuthentication(claudeCodePath: string = "claude-code"): Promise<boolean> {
 		try {
 			// Run the auth status command
@@ -72,59 +94,11 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 		}
 	}
 
-	static readonly defaultModels: ClaudeCodeModelsMap = {
-		"claude-3-opus-20240229": {
-			maxTokens: 4096,
-			contextWindow: 200000,
-			supportsImages: true,
-			supportsPromptCache: false,
-			supportsComputerUse: true,
-			inputPrice: 15,
-			outputPrice: 75,
-			description: "Claude 3 Opus - The most powerful Claude model",
-		},
-		"claude-3-sonnet-20240229": {
-			maxTokens: 4096,
-			contextWindow: 200000,
-			supportsImages: true,
-			supportsPromptCache: false,
-			supportsComputerUse: true,
-			inputPrice: 3,
-			outputPrice: 15,
-			description: "Claude 3 Sonnet - Balance of intelligence and speed",
-		},
-		"claude-3-haiku-20240307": {
-			maxTokens: 4096,
-			contextWindow: 200000,
-			supportsImages: true,
-			supportsPromptCache: false,
-			supportsComputerUse: true,
-			inputPrice: 0.25,
-			outputPrice: 1.25,
-			description: "Claude 3 Haiku - Fastest Claude model",
-		},
-		"claude-3-5-sonnet-20240620": {
-			maxTokens: 4096,
-			contextWindow: 200000,
-			supportsImages: true,
-			supportsPromptCache: false,
-			supportsComputerUse: true,
-			inputPrice: 3,
-			outputPrice: 15,
-			description: "Claude 3.5 Sonnet - More capable and faster",
-		},
-		"claude-3-7-sonnet-20250219": {
-			maxTokens: 4096,
-			contextWindow: 200000,
-			supportsImages: true,
-			supportsPromptCache: false,
-			supportsComputerUse: true,
-			thinking: true,
-			inputPrice: 3,
-			outputPrice: 15,
-			description: "Claude 3.7 Sonnet - With thinking capability",
-		},
-	}
+	/**
+	 * Reference to the centralized Claude model definitions
+	 * @see ./models/claude-models.ts for the source of truth
+	 */
+	static readonly defaultModels: ClaudeCodeModelsMap = CLAUDE_MODELS
 
 	protected options: ClaudeCodeCommandOptions
 
@@ -158,10 +132,42 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			return "claude-code"
 		}
 
-		// Check for potential security issues - no shell metacharacters allowed
-		const shellMetacharacters = /[;&|<>$`\\"\s]/
-		if (shellMetacharacters.test(trimmedPath)) {
-			console.warn(`Suspicious characters in Claude Code CLI path: "${trimmedPath}". Using default instead.`)
+		// Enhanced security validation for CLI path
+
+		// 1. Check for shell metacharacters and other dangerous patterns
+		const dangerousPatterns = [
+			/[;&|<>$`\\"\s]/, // Basic shell metacharacters
+			/\(\)/, // Command substitution
+			/\{\}/, // Brace expansion
+			/\[\]/, // Globbing
+			/\*\?/, // Wildcard characters
+			/\.\./, // Path traversal
+			/~/, // Home directory expansion
+			/env/, // Environment variables
+			/sudo/, // Privilege escalation
+			/\/bin\//, // Direct path to system binaries
+			/\/etc\//, // System configuration files
+		]
+
+		// Check each pattern and reject if any match
+		for (const pattern of dangerousPatterns) {
+			if (pattern.test(trimmedPath)) {
+				console.warn(`Potentially unsafe characters in CLI path: "${trimmedPath}". Using default instead.`)
+				return "claude-code"
+			}
+		}
+
+		// 2. Only allow alphanumeric characters, dashes, underscores, forward slashes, and dots
+		// This is a whitelist approach that only permits safe characters
+		const safePathPattern = /^[a-zA-Z0-9_\-\/\.]+$/
+		if (!safePathPattern.test(trimmedPath)) {
+			console.warn(`CLI path contains invalid characters: "${trimmedPath}". Using default instead.`)
+			return "claude-code"
+		}
+
+		// 3. Maximum reasonable path length - prevent buffer overflow attacks
+		if (trimmedPath.length > 1024) {
+			console.warn(`CLI path too long (${trimmedPath.length} chars). Using default instead.`)
 			return "claude-code"
 		}
 
@@ -434,6 +440,34 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 	/**
 	 * Create a message using the Claude Code CLI
+	 *
+	 * This method sends a conversation to Claude through the CLI and returns a stream
+	 * of responses. It handles authentication, command execution, and error formatting.
+	 *
+	 * The method automatically applies configured options such as model selection,
+	 * temperature, max tokens, and thinking budget when available.
+	 *
+	 * @param systemPrompt - System prompt to provide context for Claude
+	 * @param messages - Array of message objects to send to Claude (user/assistant pairs)
+	 * @returns An async generator yielding stream chunks with type and text properties
+	 *
+	 * @throws Will not throw directly but yields error messages in the stream
+	 *
+	 * @example
+	 * ```typescript
+	 * const stream = provider.createMessage(
+	 *   "You are a helpful assistant that explains code.",
+	 *   [{ role: "user", content: "Explain how promises work in JavaScript" }]
+	 * );
+	 *
+	 * for await (const chunk of stream) {
+	 *   if (chunk.type === "text") {
+	 *     console.log(chunk.text);
+	 *   } else if (chunk.type === "reasoning") {
+	 *     console.log("Thinking:", chunk.text);
+	 *   }
+	 * }
+	 * ```
 	 */
 	override async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
 		try {
@@ -563,33 +597,63 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 	/**
 	 * Get the model info for the current model
+	 *
+	 * This method returns information about the currently selected Claude model,
+	 * using the centralized model definitions from claude-models.ts. It retrieves
+	 * the model ID from the provider options or falls back to the default model.
+	 *
+	 * The returned model information includes properties like context window size,
+	 * maximum tokens, pricing, and other capabilities specific to each Claude model.
+	 *
+	 * @returns An object containing the model ID and model information
+	 *
+	 * @example
+	 * ```typescript
+	 * const { id, info } = provider.getModel();
+	 * console.log(`Using model: ${id}`);
+	 * console.log(`Context window: ${info.contextWindow} tokens`);
+	 * console.log(`Maximum output: ${info.maxTokens} tokens`);
+	 * ```
 	 */
 	override getModel(): { id: string; info: ModelInfo } {
-		const modelId = this.options.claudeCodeModelId || "claude-3-sonnet-20240229"
+		// Use configured model ID or default
+		const modelId = this.options.claudeCodeModelId || getDefaultClaudeModelId()
 
-		// Use the default model info for known models, or a generic one for custom models
-		const defaultInfo = modelId in ClaudeCodeHandler.defaultModels ? ClaudeCodeHandler.defaultModels[modelId] : null
-
-		// Generic fallback model info for unknown models
-		const fallbackModelInfo: ClaudeCodeModelInfo = {
-			maxTokens: 4096,
-			contextWindow: 200000,
-			supportsImages: true,
-			supportsPromptCache: false,
-			supportsComputerUse: true,
-			inputPrice: 3,
-			outputPrice: 15,
-			description: "Claude model via Claude Code CLI",
-		}
+		// Get model info from centralized definitions, or use fallback
+		const modelInfo = CLAUDE_MODELS[modelId] || CLAUDE_FALLBACK_MODEL
 
 		return {
 			id: modelId,
-			info: defaultInfo || fallbackModelInfo,
+			info: modelInfo,
 		}
 	}
 
 	/**
 	 * Implementation of a single prompt completion
+	 *
+	 * This method sends a single prompt to Claude through the CLI and returns
+	 * the complete response as a string. It's used for shorter, non-streaming
+	 * completions such as code snippets or quick answers.
+	 *
+	 * The method applies configured options such as model selection, temperature,
+	 * and max tokens when available. It handles authentication and error formatting.
+	 *
+	 * @param prompt - The text prompt to send to Claude for completion
+	 * @returns A promise that resolves to the completed text response
+	 *
+	 * @throws Error if authentication fails or the CLI encounters an error
+	 *
+	 * @example
+	 * ```typescript
+	 * try {
+	 *   const completion = await provider.completePrompt(
+	 *     "Write a function that calculates the factorial of a number in JavaScript"
+	 *   );
+	 *   console.log(completion);
+	 * } catch (error) {
+	 *   console.error("Completion failed:", error);
+	 * }
+	 * ```
 	 */
 	async completePrompt(prompt: string): Promise<string> {
 		try {
@@ -648,9 +712,31 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 	/**
 	 * Count tokens for the given content blocks
-	 * This is an approximate estimation as Claude Code CLI doesn't expose token counting
-	 * @param content Content blocks to count tokens for
-	 * @returns Approximate token count
+	 *
+	 * This method provides an approximate estimation of token count since the
+	 * Claude Code CLI doesn't expose direct token counting functionality. It uses
+	 * a simple character-based heuristic, estimating about 4 characters per token
+	 * for English text.
+	 *
+	 * The method handles different content types including plain text, text blocks,
+	 * and image references. It performs type-safe operations to ensure proper counting.
+	 *
+	 * @param content - Array of content blocks to count tokens for
+	 * @returns Promise resolving to the approximate token count
+	 *
+	 * @remarks
+	 * This is only an estimation and may not match Claude's exact token counting.
+	 * For precise token counting, a proper tokenizer implementation would be needed.
+	 * Future improvements could include using a more accurate tokenization algorithm
+	 * or integrating with Claude's token counting APIs when available.
+	 *
+	 * @example
+	 * ```typescript
+	 * const tokenCount = await provider.countTokens([
+	 *   { type: "text", text: "This is a sample text to count" }
+	 * ]);
+	 * console.log(`Estimated tokens: ${tokenCount}`);
+	 * ```
 	 */
 	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
 		// This is a simple estimation since Claude Code CLI doesn't expose token counting
@@ -704,11 +790,40 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 /**
  * Get available Claude Code models by running the CLI
+ *
+ * This function retrieves the list of available Claude models by combining:
+ * 1. The centralized model definitions from claude-models.ts
+ * 2. Any additional models reported by the Claude Code CLI
+ *
+ * It handles authentication checks, command execution, output parsing, and error handling.
+ * If the CLI is not installed or the user is not authenticated, it falls back to the
+ * centralized model definitions.
+ *
+ * @param claudeCodePath - Path to the Claude Code CLI executable (defaults to "claude-code")
+ * @returns Promise resolving to an array of model IDs supported by Claude Code
+ *
+ * @example
+ * ```typescript
+ * // Get models with default CLI path
+ * const models = await getClaudeCodeModels();
+ *
+ * // Get models with custom CLI path
+ * const models = await getClaudeCodeModels("/usr/local/bin/claude-code");
+ *
+ * // Use models to populate a dropdown
+ * const dropdown = document.getElementById("model-select");
+ * models.forEach(model => {
+ *   const option = document.createElement("option");
+ *   option.value = model;
+ *   option.textContent = model;
+ *   dropdown.appendChild(option);
+ * });
+ * ```
  */
 export async function getClaudeCodeModels(claudeCodePath = "claude-code"): Promise<string[]> {
 	try {
-		// Use the models that we know are supported by default
-		const defaultModels = Object.keys(ClaudeCodeHandler.defaultModels)
+		// Get the default models from the centralized definitions
+		const defaultModels = Object.keys(CLAUDE_MODELS)
 
 		// Check if CLI is installed first
 		try {
@@ -769,8 +884,9 @@ export async function getClaudeCodeModels(claudeCodePath = "claude-code"): Promi
 
 				// Type guard to ensure it's an array
 				if (Array.isArray(parsedOutput)) {
-					// Combine models with default models, ensuring unique values
-					return [...new Set([...parsedOutput.filter((item) => typeof item === "string"), ...defaultModels])]
+					// Combine CLI-reported models with default models, ensuring unique values
+					const cliModels = parsedOutput.filter((item): item is string => typeof item === "string")
+					return [...new Set([...cliModels, ...defaultModels])]
 				} else {
 					console.warn("Claude Code models output is not an array")
 					return defaultModels
@@ -784,6 +900,6 @@ export async function getClaudeCodeModels(claudeCodePath = "claude-code"): Promi
 		return defaultModels
 	} catch (error) {
 		console.error("Failed to get Claude Code models:", error)
-		return Object.keys(ClaudeCodeHandler.defaultModels)
+		return Object.keys(CLAUDE_MODELS)
 	}
 }
