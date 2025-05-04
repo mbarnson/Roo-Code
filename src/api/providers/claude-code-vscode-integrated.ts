@@ -9,9 +9,12 @@ import { FileContextTracker } from "../../core/context-tracking/FileContextTrack
 import { FileDetector } from "./utils/file-detector"
 import { t } from "../../i18n"
 import { formatErrorMessage, ErrorFormattingOperation } from "./utils/error-formatter"
-import { StatusReporter } from "../../core/status/StatusReporter"
-import { FileModificationsMap, ProgressResolver } from "./models/claude-code-vscode-types"
-import { VsCodeIntegratedClaudeCodeOptions } from "./models/claude-code-vscode-types"
+import {
+	FileModificationsMap,
+	ProgressResolver,
+	VsCodeIntegratedClaudeCodeOptions,
+	StatusReporter,
+} from "./models/claude-code-types"
 
 /**
  * VS Code integrated wrapper for the Claude Code CLI provider

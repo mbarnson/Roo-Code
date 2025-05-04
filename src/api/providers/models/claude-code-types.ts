@@ -122,3 +122,27 @@ export interface DetectedFileModification {
 	/** Original file content (if exists) */
 	content?: string
 }
+
+/**
+ * Status reporter interface for VS Code integration
+ * This is a temporary placeholder until the real StatusReporter is implemented
+ */
+export interface StatusReporter {
+	/** Show info message */
+	showInfo(message: string): void
+
+	/** Show error message */
+	showError(message: string, error?: Error): void
+
+	/** Show warning message */
+	showWarning(message: string): void
+
+	/** Show progress */
+	showProgress(message: string): Promise<ProgressResolver>
+
+	/** Hide progress */
+	hideProgress(): void
+
+	/** Update status */
+	updateStatus(status: string): void
+}
