@@ -147,5 +147,5 @@ export interface StatusReporter {
 	updateStatus(status: string): void
 
 	/** Report status - renamed version of updateStatus used in some implementations */
-	reportStatus(status: string): void
+	reportStatus(status: string | { status: string; message: string; provider: string }): void
 }
