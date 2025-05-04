@@ -207,8 +207,11 @@ describe("ClaudeCodeHandler", () => {
 		})
 
 		it("should handle string content blocks correctly", async () => {
-			// String content is valid in the Anthropic API
-			const content: Anthropic.Messages.ContentBlockParam[] = ["This is a plain string content block"]
+			// String content is valid in the Anthropic API for messages
+			// but for ContentBlockParam, we need to explicitly use a text block
+			const content: Anthropic.Messages.ContentBlockParam[] = [
+				{ type: "text", text: "This is a plain string content block" },
+			]
 
 			const result = await handler.countTokens(content)
 			expect(result).toBeGreaterThan(0)
@@ -275,7 +278,7 @@ describe("ClaudeCodeHandler", () => {
 				return 0
 			})
 
-			const textBlock = { type: "text", text: "Test message with 6 tokens" }
+			const textBlock: Anthropic.Messages.TextBlock = { type: "text", text: "Test message with 6 tokens" }
 			const content: Anthropic.Messages.ContentBlockParam[] = [textBlock]
 
 			const expectedTokens = 6
