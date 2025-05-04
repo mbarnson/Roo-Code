@@ -251,8 +251,10 @@ describe("StatusReporter", () => {
 			reporter.showInfo("Test message")
 			const messages = reporter.getMessages()
 
-			// Verify that modifying the returned array doesn't affect the original
-			messages.length = 0
+			// Create a new array from the readonly array
+			const mutableMessages = [...messages]
+			// Verify that modifying a new array doesn't affect the original
+			mutableMessages.length = 0
 
 			expect(reporter.getMessages().length).toBe(1)
 		})

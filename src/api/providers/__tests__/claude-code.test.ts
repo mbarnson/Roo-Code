@@ -278,7 +278,11 @@ describe("ClaudeCodeHandler", () => {
 				return 0
 			})
 
-			const textBlock: Anthropic.Messages.TextBlock = { type: "text", text: "Test message with 6 tokens" }
+			const textBlock: Anthropic.Messages.TextBlock = {
+				type: "text",
+				text: "Test message with 6 tokens",
+				citations: [],
+			}
 			const content: Anthropic.Messages.ContentBlockParam[] = [textBlock]
 
 			const expectedTokens = 6
