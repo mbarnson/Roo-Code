@@ -50,7 +50,7 @@ export function toPlatformPath(filePath: string): string {
 }
 
 /**
- * Safely join path segments with proper handling for all platforms
+ * Safely join path segments with consistent handling for all platforms
  *
  * @param segments - Path segments to join
  * @returns Joined path with appropriate separators

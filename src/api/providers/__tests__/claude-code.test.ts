@@ -76,26 +76,41 @@ describe("ClaudeCodeHandler", () => {
 	}
 
 	describe("getModel", () => {
-		it("should return the correct model info", () => {
-			const result = handler.getModel()
-			expect(result.id).toBe("claude-3-sonnet-20240229")
-			expect(result.info).toBeDefined()
-			expect(result.info.supportsComputerUse).toBe(true)
-			expect(result.info.contextWindow).toBe(200000)
-		})
+		const modelTests = [
+			{
+				name: "should return the correct model info",
+				options: { claudeCodeModelId: "claude-3-sonnet-20240229" },
+				expectedId: "claude-3-sonnet-20240229",
+				checkDetails: true,
+			},
+			{
+				name: "should use default model if not specified",
+				options: {},
+				expectedId: "claude-3-sonnet-20240229",
+				checkDetails: false,
+			},
+			{
+				name: "should use custom model if specified",
+				options: { claudeCodeModelId: "claude-3-opus-20240229" },
+				expectedId: "claude-3-opus-20240229",
+				checkDetails: false,
+			},
+		]
 
-		it("should use default model if not specified", () => {
-			handler = new ClaudeCodeHandler({})
-			const result = handler.getModel()
-			expect(result.id).toBe("claude-3-sonnet-20240229")
-		})
+		modelTests.forEach(({ name, options, expectedId, checkDetails }) => {
+			it(name, () => {
+				const testHandler = new ClaudeCodeHandler(options)
+				const result = testHandler.getModel()
 
-		it("should use custom model if specified", () => {
-			handler = new ClaudeCodeHandler({
-				claudeCodeModelId: "claude-3-opus-20240229",
+				expect(result.id).toBe(expectedId)
+
+				// Check detailed model properties if required
+				if (checkDetails) {
+					expect(result.info).toBeDefined()
+					expect(result.info.supportsComputerUse).toBe(true)
+					expect(result.info.contextWindow).toBe(200000)
+				}
 			})
-			const result = handler.getModel()
-			expect(result.id).toBe("claude-3-opus-20240229")
 		})
 	})
 

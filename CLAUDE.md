@@ -1,33 +1,32 @@
-# Claude Code Provider: Context Preservation
+# Claude Code Provider Integration
 
-## Implementation Status
+## Status
 
-1. **Core Functionality (COMPLETE)**
+1. **Core Functionality**
 
     - ClaudeCodeHandler class extending BaseProvider with authentication, CLI execution, and message processing
-    - Support for model selection, temperature, and thinking budget for Claude 3.7
-    - Command execution with standard input/output streaming
-    - Error handling with specific error types and user-friendly messages
+    - Support for model selection, temperature, and thinking budget
+    - Command execution with input/output streaming
+    - Error handling with specific error types
     - Authentication detection with cached status
     - Stream processing with thinking tag support
     - UI settings for model selection and configuration
 
-2. **Enhanced Features (COMPLETE)**
+2. **Enhanced Features**
 
     - Path validation to prevent command injection
     - Retry logic with exponential backoff
-    - Improved error classification and handling
-    - Comprehensive test coverage
+    - Error classification and handling
+    - Test coverage
     - Timeout handling and process management
-    - Documentation with diagrams and examples
 
-3. **VS Code Integration (PLANNED)**
-    - Still need to implement VS Code tab integration instead of direct file manipulation
+3. **VS Code Integration**
+    - VS Code tab integration instead of direct file manipulation
     - Status display in VS Code UI
     - Context tracking for files being accessed
-    - File operation interception (PLANNED)
+    - File operation interception
 
-## Current Architecture
+## Architecture
 
 ```
 ClaudeCodeHandler
@@ -46,92 +45,87 @@ ClaudeCodeHandler
     └── validateCliPath()
 ```
 
-## VS Code Integration Plan
+## VS Code Integration
 
-The main issue remaining is that Claude Code CLI directly modifies files rather than going through VS Code's editor APIs. We need to:
+Integration with VS Code editor APIs focuses on:
 
-1. Create a wrapper layer (`VsCodeIntegratedClaudeCode`) that:
+1. **File Operations**
 
-    - Intercepts file operations
-    - Routes them through VS Code APIs
-    - Updates UI with status information
-    - Manages tabs and file context
+    - Intercept file operations from CLI
+    - Route through VS Code editors
+    - Manage tabs and context
+    - Track file changes
 
-2. Integration points:
+2. **Status Display**
+    - Show progress and status to users
+    - Provide error visibility
+    - Indicate when operations complete
 
-    - **File Editing**: Intercept and route through VS Code's editor APIs
-    - **Status Display**: Use existing Roo Code UI components
-    - **Tab Management**: Open files in VS Code tabs
-    - **Context Tracking**: Update FileContextTracker
+## Development Plan
 
-3. Implementation approach:
-    - Create a wrapper class that extends/decorates the existing ClaudeCodeHandler
-    - Add file operation interception
-    - Implement UI status reporting
-    - Add file context tracking integration
+### Phase 1: Foundation
 
-## Integration Challenge Priorities
+- Type safety improvements in core components
+- Model definition consolidation
+- Error handling enhancement
 
-1. **File Editing Integration** (HIGHEST)
+### Phase 2: Core Improvements
 
-    - Most visible to users
-    - Creates biggest UX gap with other providers
+- Performance optimization
+- Security enhancements
+- Documentation improvements
 
-2. **Status Display** (HIGH)
+### Phase 3: UI Refinements
 
-    - Critical for user feedback
-    - Needed for error visibility
+- Extract reusable UI components
+- Ensure UI consistency
 
-3. **Tab Management** (MEDIUM)
+### Phase 4: Integration
 
-    - Important for workflow
-    - Users expect files to open in tabs
+- Complete file operation interception
+- Enhance context tracking
+- Implement tab management
+- Improve status display
 
-4. **Context Tracking** (MEDIUM)
-    - Important for continuity
-    - Less visible to users but essential for system coherence
+### Phase 5: Testing and Polish
 
-## Next Steps
+- Expand test coverage
+- Complete documentation
+- Clean up TODOs and planned items
 
-1. Create prototype of VS Code integration wrapper
-2. Test file operation interception
-3. Add status reporting to UI
-4. Implement tab management
-5. Add context tracking
+## Issues to Address
 
-Reference documentation: VSCODE_INTEGRATION.md for detailed design
+1. **Code Structure**
 
-## Critical PR Review Issues
+    - Refactor UI components in ApiOptions.tsx
+    - Extract duplicate patterns to reusable components
 
-See CLAUDE_PR_TASKS.md for a detailed list of issues that need to be addressed before this PR can be merged. Key areas requiring attention:
+2. **Type Safety**
 
-1. **Code Duplication**: Refactor UI components in ApiOptions.tsx to reduce duplication
-2. **Type Safety**: Fix unsafe type operations and improve type definitions
-3. **Test Coverage**: Add tests for error handling, edge cases, and VS Code integration
-4. **VS Code Integration**: Complete file operation interception and tab management
-5. **Performance**: Optimize token counting and add caching for model information
-6. **Error Handling**: Improve error propagation and user feedback
-7. **Security**: Strengthen path validation and file permission checks
-8. **Documentation**: Add comprehensive API and user documentation
-9. **Model Definitions**: Centralize model definitions to avoid duplication
-10. **Implementation Completeness**: Finish all planned features and remove TODOs
+    - Fix unsafe type operations
+    - Improve type definitions
+    - Add validation for JSON operations
 
-## Code Issues
+3. **VS Code Integration**
 
-Any syntax errors in the edited files need to be fixed:
+    - Complete file operation interception
+    - Implement tab management
+    - Improve status reporting
+    - Enhance context tracking
 
-1. waitForAuthentication method may need adjustment to handle yield correctly
-2. UI duplication in ApiOptions.tsx 
-3. Fix pre-commit hook issues with generated files
-4. TypeScript errors across claude-code implementations
-   - Fixed with temporary tsconfig.json exclusions and @ts-nocheck directives
-   - Type definitions for ClaudeCodeStatus and other components still need proper typing
-   - Final PR should resolve these type issues properly before merging
+4. **Performance**
+
+    - Optimize token counting
+    - Add caching for model information
+    - Implement limits for large operations
+
+5. **Security**
+    - Validate paths against command injection
+    - Add file permission checks
+    - Prevent leaking sensitive information
 
 ## Development Environment
 
-- **Operating System**: macOS (BSD-based)
-- **Note**: When using command-line tools, use macOS compatible variants of commands. For example:
-  - Use `sed` with BSD syntax, not GNU syntax
-  - Avoid Linux-specific options that aren't available on macOS
-  - Test commands locally before using them in scripts
+- **OS**: macOS (BSD-based)
+- **Command Compatibility**: Use macOS compatible variants of commands
+- **Testing**: Run tests locally before using in scripts

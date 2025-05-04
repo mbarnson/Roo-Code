@@ -104,7 +104,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 			try {
 				const status = JSON.parse(output) as unknown
-				// Add proper type guard to check structure
+				// Add type guard to verify object structure
 				if (status && typeof status === "object" && "authenticated" in status) {
 					const authStatus = status as ClaudeCodeAuthStatus
 					return authStatus.authenticated === true
@@ -279,13 +279,10 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			const isCliInstalled = await this.isClaudeCodeInstalled(claudeCodePath)
 
 			if (!isCliInstalled) {
-				this.authError = "Claude Code CLI not found. Please install it from https://claude.ai/code"
-				this.authChecked = true
-				this.isAuthenticated = false
+				this.updateAuthStatus(false, "Claude Code CLI not found. Please install it from https://claude.ai/code")
 				return
 			}
 
-			// Check authentication status with retry for network issues
 			try {
 				this.isAuthenticated = await this.retryWithBackoff(
 					() => ClaudeCodeHandler.checkAuthentication(claudeCodePath),
@@ -293,25 +290,28 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 					100, // initial delay
 					1000, // max delay
 				)
+
+				this.authError = this.isAuthenticated
+					? null
+					: "Not authenticated with Claude Code CLI. Please run 'claude-code login' in your terminal"
+				this.authChecked = true
 			} catch (error) {
 				console.error("Failed to check Claude Code authentication after retries:", error)
-				this.isAuthenticated = false
+				this.updateAuthStatus(false, "Failed to verify authentication status")
 			}
-
-			if (!this.isAuthenticated) {
-				this.authError =
-					"Not authenticated with Claude Code CLI. Please run 'claude-code login' in your terminal"
-			} else {
-				this.authError = null
-			}
-
-			this.authChecked = true
 		} catch (error) {
 			console.error("Error checking Claude Code authentication:", error)
-			this.authError = "Error checking authentication status"
-			this.authChecked = true
-			this.isAuthenticated = false
+			this.updateAuthStatus(false, "Error checking authentication status")
 		}
+	}
+
+	/**
+	 * Update authentication status with a single method
+	 */
+	private updateAuthStatus(isAuthenticated: boolean, errorMessage: string | null): void {
+		this.isAuthenticated = isAuthenticated
+		this.authError = errorMessage
+		this.authChecked = true
 	}
 
 	/**
@@ -349,121 +349,84 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 		const { executeWithConcurrencyControl } = require("../../provider/claude-code/concurrency-utils")
 
 		// Use concurrency control to limit simultaneous CLI invocations
-		return executeWithConcurrencyControl(() => this.executeClaudeCodeCommandCore(command, input, timeout))
-	}
-
-	/**
-	 * Core implementation of Claude Code CLI command execution
-	 * @private
-	 */
-	private async executeClaudeCodeCommandCore(
-		command: string[],
-		input?: string,
-		timeout = 60000,
-	): Promise<AsyncIterable<string>> {
-		return new Promise((resolve, reject) => {
+		return executeWithConcurrencyControl(async () => {
 			const claudeCodePath = this.validateCliPath(this.options.claudeCodePath)
 			let stderrOutput = ""
-			let hasExited = false
 
-			// Set a timeout
-			const timeoutId = setTimeout(() => {
-				if (!hasExited) {
-					try {
-						childProcess.kill()
-					} catch (e) {
-						console.error("Failed to kill Claude Code CLI process:", e)
-					}
-					reject(new Error(`Claude Code CLI command timed out after ${timeout}ms`))
-				}
-			}, timeout)
-
+			// Set up process
 			const childProcess = spawn(claudeCodePath, command, {
 				shell: true,
 				env: {
 					...process.env,
-					NODE_NO_WARNINGS: "1", // Suppress warnings
+					NODE_NO_WARNINGS: "1",
 				},
 			})
 
-			// Create an async generator to stream the output
-			const stream = (async function* () {
+			// Create a promise to handle process completion
+			const processPromise = new Promise<void>((resolve, reject) => {
+				const timer = setTimeout(() => {
+					childProcess.kill()
+					reject(new Error(`Claude Code CLI command timed out after ${timeout}ms`))
+				}, timeout)
+
+				// Handle errors
+				childProcess.on("error", (err) => {
+					clearTimeout(timer)
+
+					if (err.message.includes("ENOENT")) {
+						reject(new Error(`Claude Code CLI not found. Please install it or check settings.`))
+					} else if (err.message.includes("EACCES")) {
+						reject(new Error(`Permission denied when executing Claude Code CLI.`))
+					} else {
+						reject(new Error(`Failed to start Claude Code CLI: ${err.message}`))
+					}
+				})
+
+				// Collect stderr output
+				childProcess.stderr.on("data", (data) => {
+					const stderr = data.toString()
+					stderrOutput += stderr
+
+					// Check for auth issues
+					if (stderr.includes("not authenticated") || stderr.includes("auth")) {
+						this.updateAuthStatus(false, "Not authenticated with Claude Code CLI")
+					}
+				})
+
+				// Handle process completion
+				childProcess.on("close", (code) => {
+					clearTimeout(timer)
+
+					if (code !== 0) {
+						console.error(`Claude Code CLI exited with code ${code}: ${stderrOutput}`)
+					}
+
+					resolve()
+				})
+			})
+
+			// Handle input if provided
+			if (input) {
+				childProcess.stdin.write(input)
+				childProcess.stdin.end()
+			}
+
+			// Create stream for output
+			const outputStream = (async function* () {
 				try {
 					for await (const chunk of childProcess.stdout) {
 						yield chunk.toString()
 					}
 				} catch (error) {
-					console.error("Error reading from Claude Code CLI stdout:", error)
-					throw new Error(
-						`Failed to read from Claude Code CLI: ${error instanceof Error ? error.message : String(error)}`,
-					)
+					console.error("Error reading Claude Code CLI output:", error)
+					throw error
 				}
 			})()
 
-			// Handle standard input if provided
-			if (input) {
-				try {
-					childProcess.stdin.write(input)
-					childProcess.stdin.end()
-				} catch (error) {
-					reject(
-						new Error(
-							`Failed to write to Claude Code CLI stdin: ${error instanceof Error ? error.message : String(error)}`,
-						),
-					)
-					clearTimeout(timeoutId)
-					return
-				}
-			}
+			// Start the process promise (don't await it)
+			processPromise.catch((error) => console.error("Claude Code process error:", error))
 
-			// Handle errors
-			childProcess.on("error", (err) => {
-				hasExited = true
-				clearTimeout(timeoutId)
-
-				// Handle common errors
-				if (err.message.includes("ENOENT")) {
-					reject(
-						new Error(
-							`Claude Code CLI not found. Make sure it's installed and in your PATH, or specify the full path in settings.`,
-						),
-					)
-				} else if (err.message.includes("EACCES")) {
-					reject(new Error(`Permission denied when executing Claude Code CLI. Check file permissions.`))
-				} else {
-					reject(new Error(`Failed to start Claude Code CLI: ${err.message}`))
-				}
-			})
-
-			childProcess.stderr.on("data", (data) => {
-				const stderr = data.toString()
-				stderrOutput += stderr
-				console.error(`Claude Code CLI stderr: ${stderr}`)
-
-				// Check for common error messages in stderr
-				if (stderr.includes("not authenticated") || stderr.includes("auth")) {
-					this.isAuthenticated = false
-					this.authError = "Not authenticated with Claude Code CLI"
-				}
-			})
-
-			childProcess.on("close", (code) => {
-				hasExited = true
-				clearTimeout(timeoutId)
-
-				if (code !== 0) {
-					console.error(`Claude Code CLI exited with code ${code}`)
-
-					// Only log as an error when not resolved yet
-					if (stderrOutput && code !== null && code !== 0) {
-						// Don't reject here - we'll still return the stream
-						// but log the error for debugging
-						console.error(`Claude Code CLI error: ${stderrOutput}`)
-					}
-				}
-			})
-
-			resolve(stream)
+			return outputStream
 		})
 	}
 
@@ -569,7 +532,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 				args.push("--thinking-budget", this.options.modelMaxThinkingTokens.toString())
 			}
 
-			// Process message content with proper type handling
+			// Process message content with appropriate type handling
 			const processedMessages = messages.map((msg) => {
 				let processedContent: string
 
@@ -598,7 +561,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 				}
 			})
 
-			// Create a properly typed input object for Claude Code CLI
+			// Create a correctly typed input object for Claude Code CLI
 			const inputJson: ClaudeCodeChatInput = {
 				system: systemPrompt,
 				messages: processedMessages,
@@ -781,14 +744,14 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * for English text.
 	 *
 	 * The method handles different content types including plain text, text blocks,
-	 * and image references. It performs type-safe operations to ensure proper counting.
+	 * and image references. It performs type-safe operations to ensure accurate counting.
 	 *
 	 * @param content - Array of content blocks to count tokens for
 	 * @returns Promise resolving to the approximate token count
 	 *
 	 * @remarks
 	 * This is only an estimation and may not match Claude's exact token counting.
-	 * For precise token counting, a proper tokenizer implementation would be needed.
+	 * For precise token counting, a specialized tokenizer implementation would be needed.
 	 * Future improvements could include using a more accurate tokenization algorithm
 	 * or integrating with Claude's token counting APIs when available.
 	 *
@@ -801,122 +764,69 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 	 * ```
 	 */
 	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
-		// This is a simple estimation since Claude Code CLI doesn't expose token counting
-		// For more accurate token counting, a proper tokenizer would be needed
-		let totalChars = 0
-
 		// Handle empty content array
 		if (!content || content.length === 0) {
 			return 0
 		}
 
-		// Type guard for text content blocks
-		const isTextContentBlock = (
-			block: Anthropic.Messages.ContentBlockParam,
-		): block is Anthropic.Messages.TextBlock => {
-			return (
-				typeof block === "object" &&
-				block !== null &&
-				"type" in block &&
-				block.type === "text" &&
-				"text" in block &&
-				typeof block.text === "string"
-			)
-		}
-
-		// Type guard for image content blocks
-		const isImageContentBlock = (
-			block: Anthropic.Messages.ContentBlockParam,
-		): block is Anthropic.Messages.ImageBlockParam => {
-			return (
-				typeof block === "object" &&
-				block !== null &&
-				"type" in block &&
-				block.type === "image" &&
-				"source" in block
-			)
-		}
-
-		// Import tiktoken utilities dynamically to avoid circular dependencies
-		let countTokensWithTiktoken: ((text: string) => number) | null = null
+		// Import tiktoken directly to avoid complexity
+		let countTokensEstimate: ((text: string) => number) | null = null
 		try {
-			// Try to use the existing tiktoken implementation for more accurate counting
 			const tiktoken = require("../../utils/tiktoken")
-			if (tiktoken && typeof tiktoken.countTokensEstimate === "function") {
-				countTokensWithTiktoken = tiktoken.countTokensEstimate
-			}
+			countTokensEstimate = tiktoken.countTokensEstimate
 		} catch (error) {
-			console.warn("Tiktoken not available, falling back to character-based estimation:", error)
-			countTokensWithTiktoken = null
+			console.warn("Tiktoken not available, using character-based estimation")
 		}
+
+		let totalTokens = 0
 
 		// Process each content block
 		for (const block of content) {
+			if (!block) continue
+
 			try {
-				if (!block) continue
-
-				// Process based on content block type
+				// Handle string content
 				if (typeof block === "string") {
-					// String content - either count with tiktoken or character-based
-					const blockText = String(block || "")
-					if (countTokensWithTiktoken) {
-						totalChars += countTokensWithTiktoken(blockText)
-					} else {
-						totalChars += blockText.length
+					totalTokens += this.countBlockTokens(block, countTokensEstimate)
+				}
+				// Handle object content
+				else if (typeof block === "object" && block !== null) {
+					// Text blocks
+					if (block.type === "text" && "text" in block) {
+						totalTokens += this.countBlockTokens(block.text as string, countTokensEstimate)
 					}
-				} else if (typeof block === "object") {
-					// Type guard for text content blocks
-					if (isTextContentBlock(block)) {
-						const textContent = String(block.text || "")
-
-						// Count tokens with tiktoken if available
-						if (countTokensWithTiktoken) {
-							totalChars += countTokensWithTiktoken(textContent)
-						} else {
-							totalChars += textContent.length
-						}
+					// Image blocks
+					else if (block.type === "image") {
+						totalTokens += 85 // Standard estimate for image blocks
 					}
-					// Type guard for image content blocks
-					else if (isImageContentBlock(block)) {
-						// Images contribute a fixed token cost in our estimation
-						// Based on testing, a typical image block costs about 50-85 tokens
-						// We're using a higher estimate to be safe
-						totalChars += countTokensWithTiktoken ? 85 : 340 // ~85 tokens or character equivalent
-					}
-					// For other block types, serialize and count
-					else if (block !== null) {
-						try {
-							// Convert to string with safe handling
-							const blockText = JSON.stringify(block)
-							// Remove markup to just count meaningful text
-							const cleanedText = blockText.replace(/"(type|role|source|name)":\s*"[^"]*"/g, "")
-
-							// Count tokens with tiktoken if available
-							if (countTokensWithTiktoken) {
-								totalChars += countTokensWithTiktoken(cleanedText)
-							} else {
-								totalChars += cleanedText.length
-							}
-						} catch (jsonError) {
-							console.warn("Error stringifying content block:", jsonError)
-							continue
-						}
+					// Other blocks
+					else {
+						const blockText = JSON.stringify(block).replace(/"(type|role|source|name)":\s*"[^"]*"/g, "")
+						totalTokens += this.countBlockTokens(blockText, countTokensEstimate)
 					}
 				}
 			} catch (error) {
 				console.warn("Error counting tokens for block:", error)
-				// Continue processing other blocks
 			}
 		}
 
-		// If we used tiktoken, return the accumulated count directly
-		if (countTokensWithTiktoken) {
-			return totalChars
+		return totalTokens
+	}
+
+	/**
+	 * Count tokens for a text block using tiktoken if available
+	 */
+	private countBlockTokens(text: string, tokenCounter: ((text: string) => number) | null): number {
+		if (!text) return 0
+
+		const safeText = String(text || "")
+
+		if (tokenCounter) {
+			return tokenCounter(safeText)
 		}
 
-		// Otherwise use rough estimation: ~4 characters per token for English text
-		const estimatedTokens = Math.ceil(totalChars / 4)
-		return estimatedTokens
+		// Rough estimation: ~4 characters per token for English text
+		return Math.ceil(safeText.length / 4)
 	}
 
 	/**
