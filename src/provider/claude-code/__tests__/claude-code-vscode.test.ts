@@ -1,5 +1,5 @@
 import type { PromptOptions } from "../common-types"
-import type { VsCodeIntegratedClaudeCode } from "../claude-code-vscode"
+import { VsCodeIntegratedClaudeCode, VsCodeIntegratedClaudeCodeTestingInterface } from "../claude-code-vscode"
 
 // Mock dependencies
 jest.mock("vscode", () => ({
@@ -31,7 +31,11 @@ jest.mock("vscode", () => ({
 			createDirectory: jest.fn().mockResolvedValue(undefined),
 			stat: jest.fn().mockResolvedValue({ type: 1 }),
 		},
-		openTextDocument: jest.fn().mockResolvedValue({}),
+		openTextDocument: jest.fn().mockResolvedValue({
+			getText: jest.fn().mockReturnValue("original content"),
+			positionAt: jest.fn().mockReturnValue({ line: 0, character: 0 }),
+		}),
+		applyEdit: jest.fn().mockResolvedValue(true),
 	},
 	StatusBarAlignment: {
 		Left: 1,
@@ -44,6 +48,26 @@ jest.mock("vscode", () => ({
 	},
 	commands: {
 		executeCommand: jest.fn(),
+	},
+	Range: class {
+		constructor(
+			public start: any,
+			public end: any,
+		) {}
+	},
+	Position: class {
+		constructor(
+			public line: number,
+			public character: number,
+		) {}
+	},
+	WorkspaceEdit: class {
+		constructor() {}
+		createFile = jest.fn()
+		deleteFile = jest.fn()
+		renameFile = jest.fn()
+		insert = jest.fn()
+		replace = jest.fn()
 	},
 }))
 
@@ -59,33 +83,25 @@ jest.mock("../claude-code", () => ({
 	},
 }))
 
-// Mock the claude-code-vscode.ts module to expose private methods for testing
-jest.mock("../claude-code-vscode", () => {
-	// Get the actual implementation
-	const originalModule = jest.requireActual("../claude-code-vscode")
-
-	// Override to expose private methods for testing
-	return {
-		...originalModule,
-		// Make the private methods public for testing
-		__exposePrivateMethods: true,
-	}
-})
-
-// No need for DiffViewProvider and StatusReporter mocks in simplified tests
-
 describe("VsCodeIntegratedClaudeCode", () => {
 	let claudeCode: VsCodeIntegratedClaudeCode
+	let testingInterface: VsCodeIntegratedClaudeCodeTestingInterface
 
 	beforeEach(() => {
 		jest.clearAllMocks()
 
-		// We only test the public completePrompt method
-		claudeCode = {
-			completePrompt: jest.fn().mockResolvedValue({
-				content: "Mock response with file operations updated in VS Code",
-			}),
-		} as unknown as VsCodeIntegratedClaudeCode
+		// Create a real instance with mocked dependencies
+		claudeCode = new VsCodeIntegratedClaudeCode({
+			claudeCodeModelId: "claude-3-sonnet-20240229",
+		})
+
+		// Access the testing interface
+		testingInterface = claudeCode._exposeForTesting()
+
+		// Mock the completePrompt method to avoid actual execution
+		claudeCode.completePrompt = jest.fn().mockResolvedValue({
+			content: "Mock response with file operations updated in VS Code",
+		}) as any
 	})
 
 	describe("completePrompt", () => {
@@ -100,6 +116,87 @@ describe("VsCodeIntegratedClaudeCode", () => {
 
 			// Verify the response contains the expected content
 			expect(result.content).toContain("Mock response with file operations")
+		})
+	})
+
+	describe("parseFileOperationsFromResponse", () => {
+		it("should parse file creation operations", () => {
+			const response = "I've created a new file called `/tmp/example.js`:\n```js\nconsole.log('Hello');\n```"
+			const operations = testingInterface.parseFileOperationsFromResponse(response)
+
+			expect(operations).toHaveLength(1)
+			expect(operations[0]).toEqual({
+				type: "create",
+				path: "/tmp/example.js",
+				content: "console.log('Hello');",
+			})
+		})
+
+		it("should parse file update operations", () => {
+			const response = "I've updated the file `/tmp/example.js`:\n```js\nconsole.log('Updated');\n```"
+			const operations = testingInterface.parseFileOperationsFromResponse(response)
+
+			expect(operations).toHaveLength(1)
+			expect(operations[0]).toEqual({
+				type: "update",
+				path: "/tmp/example.js",
+				content: "console.log('Updated');",
+			})
+		})
+
+		it("should parse file deletion operations", () => {
+			const response = "I've deleted the file `/tmp/example.js`"
+			const operations = testingInterface.parseFileOperationsFromResponse(response)
+
+			expect(operations).toHaveLength(1)
+			expect(operations[0]).toEqual({
+				type: "delete",
+				path: "/tmp/example.js",
+			})
+		})
+
+		it("should parse file rename operations", () => {
+			const response = "I've renamed the file `/tmp/old.js` to `/tmp/new.js`"
+			const operations = testingInterface.parseFileOperationsFromResponse(response)
+
+			expect(operations).toHaveLength(1)
+			expect(operations[0]).toEqual({
+				type: "rename",
+				path: "/tmp/new.js",
+				oldPath: "/tmp/old.js",
+			})
+		})
+	})
+
+	describe("removeFileOperationsFromResponse", () => {
+		it("should replace file creation notices with VS Code appropriate message", () => {
+			const response = "I've created a new file called `/tmp/example.js`:\n```js\nconsole.log('Hello');\n```"
+			const modified = testingInterface.removeFileOperationsFromResponse(response)
+
+			expect(modified).toContain("File /tmp/example.js has been created in VS Code")
+			expect(modified).not.toContain("console.log('Hello');")
+		})
+
+		it("should replace file update notices with VS Code appropriate message", () => {
+			const response = "I've updated the file `/tmp/example.js`:\n```js\nconsole.log('Updated');\n```"
+			const modified = testingInterface.removeFileOperationsFromResponse(response)
+
+			expect(modified).toContain("File /tmp/example.js has been updated in VS Code")
+			expect(modified).not.toContain("console.log('Updated');")
+		})
+
+		it("should replace file deletion notices with VS Code appropriate message", () => {
+			const response = "I've deleted the file `/tmp/example.js`"
+			const modified = testingInterface.removeFileOperationsFromResponse(response)
+
+			expect(modified).toContain("File /tmp/example.js has been deleted in VS Code")
+		})
+
+		it("should replace file rename notices with VS Code appropriate message", () => {
+			const response = "I've renamed the file `/tmp/old.js` to `/tmp/new.js`"
+			const modified = testingInterface.removeFileOperationsFromResponse(response)
+
+			expect(modified).toContain("File /tmp/old.js has been renamed to /tmp/new.js in VS Code")
 		})
 	})
 })

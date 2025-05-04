@@ -15,6 +15,21 @@ import {
 import { CLAUDE_MODELS, CLAUDE_FALLBACK_MODEL, getDefaultClaudeModelId } from "./models/claude-models"
 
 /**
+ * Testing interface for ClaudeCodeHandler
+ *
+ * Exposes private methods for testing purposes in a controlled way.
+ * This interface should only be used in tests.
+ */
+export interface ClaudeCodeTestingInterface {
+	isAuthenticated: boolean
+	authChecked: boolean
+	authError: string | null
+	waitForAuthentication(canYield?: boolean): Promise<[boolean, string | null]>
+	validateCliPath(path?: string): string
+	executeClaudeCodeCommand(command: string[], input?: string, timeout?: number): Promise<AsyncIterable<string>>
+}
+
+/**
  * Claude Code provider that uses the Claude Code CLI to interact with Claude
  */
 export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, SingleCompletionHandler {
@@ -779,6 +794,44 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 		// For more accurate token counting, a proper tokenizer would be needed
 		let totalChars = 0
 
+		// Type guard for text content blocks
+		const isTextContentBlock = (
+			block: Anthropic.Messages.ContentBlockParam,
+		): block is Anthropic.Messages.TextBlock => {
+			return (
+				typeof block === "object" &&
+				block !== null &&
+				"type" in block &&
+				block.type === "text" &&
+				"text" in block &&
+				typeof block.text === "string"
+			)
+		}
+
+		// Type guard for image content blocks
+		const isImageContentBlock = (
+			block: Anthropic.Messages.ContentBlockParam,
+		): block is Anthropic.Messages.ImageBlock => {
+			return (
+				typeof block === "object" &&
+				block !== null &&
+				"type" in block &&
+				block.type === "image" &&
+				"source" in block
+			)
+		}
+
+		// Import tiktoken utilities dynamically to avoid circular dependencies
+		let countTokensWithTiktoken: ((text: string) => number) | null = null
+		try {
+			// Try to use the existing tiktoken implementation for more accurate counting
+			const tiktoken = require("../../utils/tiktoken")
+			countTokensWithTiktoken = tiktoken.countTokensEstimate
+		} catch (error) {
+			console.warn("Tiktoken not available, falling back to character-based estimation:", error)
+			countTokensWithTiktoken = null
+		}
+
 		// Process each content block
 		for (const block of content) {
 			try {
@@ -786,31 +839,48 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 
 				// Process based on content block type
 				if (typeof block === "string") {
-					// String content
-					totalChars += (block as string)?.length || 0
-				} else if (typeof block === "object") {
-					// Safe string conversion with type checking
-					let blockText = ""
-
-					if ("type" in block && block.type === "text" && "text" in block) {
-						const textContent = String(block.text || "")
-						blockText = textContent
-					} else if ("type" in block && block.type === "image" && "source" in block) {
-						// Images contribute less to token count in our estimation
-						blockText = "[image]"
+					// String content - either count with tiktoken or character-based
+					if (countTokensWithTiktoken) {
+						totalChars += countTokensWithTiktoken(block)
 					} else {
-						// Convert block to JSON string for other types, with safe handling
+						totalChars += block.length || 0
+					}
+				} else if (typeof block === "object") {
+					// Type guard for text content blocks
+					if (isTextContentBlock(block)) {
+						const textContent = block.text || ""
+
+						// Count tokens with tiktoken if available
+						if (countTokensWithTiktoken) {
+							totalChars += countTokensWithTiktoken(textContent)
+						} else {
+							totalChars += textContent.length
+						}
+					}
+					// Type guard for image content blocks
+					else if (isImageContentBlock(block)) {
+						// Images contribute a fixed token cost in our estimation
+						totalChars += 7 // Approx. tokens for [image] reference
+					}
+					// For other block types, serialize and count
+					else {
 						try {
-							blockText = JSON.stringify(block)
-							// Remove markup to just count text
-							blockText = blockText.replace(/"(type|role|source|name)":\s*"[^"]*"/g, "")
+							// Convert to string with safe handling
+							const blockText = JSON.stringify(block)
+							// Remove markup to just count meaningful text
+							const cleanedText = blockText.replace(/"(type|role|source|name)":\s*"[^"]*"/g, "")
+
+							// Count tokens with tiktoken if available
+							if (countTokensWithTiktoken) {
+								totalChars += countTokensWithTiktoken(cleanedText)
+							} else {
+								totalChars += cleanedText.length
+							}
 						} catch (jsonError) {
-							console.warn("Error stringifying block:", jsonError)
+							console.warn("Error stringifying content block:", jsonError)
 							continue
 						}
 					}
-
-					totalChars += blockText.length
 				}
 			} catch (error) {
 				console.warn("Error counting tokens for block:", error)
@@ -818,9 +888,51 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler, Singl
 			}
 		}
 
-		// Rough estimation: ~4 characters per token for English text
+		// If we used tiktoken, return the accumulated count directly
+		if (countTokensWithTiktoken) {
+			return totalChars
+		}
+
+		// Otherwise use rough estimation: ~4 characters per token for English text
 		const estimatedTokens = Math.ceil(totalChars / 4)
 		return estimatedTokens
+	}
+
+	/**
+	 * Expose internal methods for testing purposes
+	 *
+	 * This method provides controlled access to private methods for testing.
+	 * It should only be used in test files.
+	 *
+	 * @returns Interface with access to internal methods
+	 */
+	static _exposeForTesting(instance: ClaudeCodeHandler): ClaudeCodeTestingInterface {
+		return {
+			get isAuthenticated() {
+				return instance["isAuthenticated"]
+			},
+			set isAuthenticated(value: boolean) {
+				instance["isAuthenticated"] = value
+			},
+
+			get authChecked() {
+				return instance["authChecked"]
+			},
+			set authChecked(value: boolean) {
+				instance["authChecked"] = value
+			},
+
+			get authError() {
+				return instance["authError"]
+			},
+			set authError(value: string | null) {
+				instance["authError"] = value
+			},
+
+			waitForAuthentication: instance["waitForAuthentication"].bind(instance),
+			validateCliPath: instance["validateCliPath"].bind(instance),
+			executeClaudeCodeCommand: instance["executeClaudeCodeCommand"].bind(instance),
+		}
 	}
 }
 

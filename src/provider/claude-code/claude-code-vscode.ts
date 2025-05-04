@@ -875,6 +875,29 @@ export class VsCodeIntegratedClaudeCode extends ClaudeCodeHandler {
 }
 
 /**
+ * Testing interface for VsCodeIntegratedClaudeCode
+ *
+ * Exposes private methods for testing purposes in a controlled way.
+ * This interface should only be used in tests.
+ */
+export interface VsCodeIntegratedClaudeCodeTestingInterface {
+	openedTabs: Set<string>
+	fileContextTracker?: FileContextTracker
+	diffViewProvider?: DiffViewProviderType
+	statusReporter?: StatusReporter
+	parseFileOperationsFromResponse(response: string): FileOperation[]
+	fileExists(path: string): boolean
+	removeFileOperationsFromResponse(response: string): string
+	openFileInTab(filePath: string): Promise<vscode.TextEditor | undefined>
+	updateFileContext(filePath: string): void
+	updateStatus(status: string): void
+	showInfo(message: string): void
+	showWarning(message: string): void
+	showSuccess(message: string): void
+	handleError(error: Error | ClaudeCodeError): void
+}
+
+/**
  * Export the DiffViewProvider interface to avoid conflicts
  * with the imported type
  */
@@ -887,4 +910,35 @@ export function createVsCodeIntegratedClaudeCode(
 	options: VsCodeIntegratedClaudeCodeOptions,
 ): VsCodeIntegratedClaudeCode {
 	return new VsCodeIntegratedClaudeCode(options)
+}
+
+/**
+ * Add _exposeForTesting method to the VsCodeIntegratedClaudeCode class
+ */
+VsCodeIntegratedClaudeCode.prototype._exposeForTesting = function (): VsCodeIntegratedClaudeCodeTestingInterface {
+	return {
+		get openedTabs() {
+			return this.openedTabs
+		},
+		get fileContextTracker() {
+			return this.fileContextTracker
+		},
+		get diffViewProvider() {
+			return this.diffViewProvider
+		},
+		get statusReporter() {
+			return this.statusReporter
+		},
+
+		parseFileOperationsFromResponse: this.parseFileOperationsFromResponse.bind(this),
+		fileExists: this.fileExists.bind(this),
+		removeFileOperationsFromResponse: this.removeFileOperationsFromResponse.bind(this),
+		openFileInTab: this.openFileInTab.bind(this),
+		updateFileContext: this.updateFileContext.bind(this),
+		updateStatus: this.updateStatus.bind(this),
+		showInfo: this.showInfo.bind(this),
+		showWarning: this.showWarning.bind(this),
+		showSuccess: this.showSuccess.bind(this),
+		handleError: this.handleError.bind(this),
+	}
 }
